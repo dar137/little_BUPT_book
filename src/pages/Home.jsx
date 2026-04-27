@@ -1,4 +1,4 @@
-import PostCard from '../components-2/PostCard';
+import PostCard from '../components/PostCard';
 
 function Home() {
   const posts = [
