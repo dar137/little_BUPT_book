@@ -1,18 +1,38 @@
+import { useState } from 'react';
 import PostCard from '../components/PostCard';
+import CategoryTabs from '../components/CategoryTabs';
+import { posts } from '../mockData';
 
 function Home() {
-  const posts = [
-    { id: 1, title: '有同学一起组队参加大创吗？', content: '想找一个前端和一个后端，项目是关于校园二手交易的...', author: '小明', time: '10分钟前', tag: '组队' },
-    { id: 2, title: '图书馆四楼捡到一张校园卡', content: '失主叫张三，学号2024xxxx，请失主联系我...', author: '热心同学', time: '1小时前', tag: '失物招领' },
-    { id: 3, title: '求推荐好用的笔记软件', content: '之前一直用Notion，但最近觉得有点重，有没有轻量一点的推荐？', author: '笔记达人', time: '3小时前', tag: '闲聊' },
-  ];
+  // 1. 定义状态：当前选中的标签，默认是“全部”
+  const [activeTag, setActiveTag] = useState('全部');
+
+  // 2. 根据选中的标签过滤帖子
+  //    如果选中的是“全部”，就显示所有帖子；否则只显示 tag 匹配的帖子
+  const filteredPosts = activeTag === '全部'
+    ? posts
+    : posts.filter(post => post.tag === activeTag);
 
   return (
     <div style={{ padding: '20px' }}>
       <h2>🏠 首页信息流</h2>
-      {posts.map(post => (
-        <PostCard key={post.id} post={post} />
-      ))}
+
+      {/* 3. 放入标签栏组件，传入当前选中的标签和切换标签的函数 */}
+      <CategoryTabs
+        activeTag={activeTag}
+        onTagChange={setActiveTag}
+      />
+
+      {/* 4. 渲染过滤后的帖子列表 */}
+      {filteredPosts.length > 0 ? (
+        filteredPosts.map(post => (
+          <PostCard key={post.id} post={post} />
+        ))
+      ) : (
+        <p style={{ color: '#999', textAlign: 'center', marginTop: '40px' }}>
+          该分类下暂无帖子
+        </p>
+      )}
     </div>
   );
 }

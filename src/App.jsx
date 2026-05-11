@@ -15,7 +15,6 @@ function App() {
         <nav style={{ padding: '10px', background: '#f0f0f0' }}>
           <Link to="/" style={{ marginRight: '15px' }}>首页</Link>
           <Link to="/create" style={{ marginRight: '15px' }}>发帖</Link>
-          <Link to="/post/1" style={{ marginRight: '15px' }}>帖子示例</Link>
           <Link to="/search" style={{ marginRight: '15px' }}>搜索</Link>
           <Link to="/profile" style={{ marginRight: '15px' }}>我的</Link>
           <Link to="/login" style={{ marginRight: '15px' }}>登录</Link>
