@@ -1,95 +1,101 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { FaSignInAlt, FaUser, FaLock, FaSchool } from "react-icons/fa";
 
 const Login = () => {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     // TODO: 后期替换成真实接口 /api/user/login
-    if (studentId === "20240001" && password === "123456") {
-      localStorage.setItem("token", "fake-token-123");
-      localStorage.setItem("userInfo", JSON.stringify({ studentId, name: "测试用户" }));
-      navigate("/");
-    } else {
-      setError("学号或密码错误（演示用：20240001 / 123456）");
-    }
+    setTimeout(() => {
+      if (studentId === "20240001" && password === "123456") {
+        // 保存用户信息
+        const userInfo = {
+          id: 1,
+          studentId: studentId,
+          name: "刘宇欣",
+          email: "liuyuxin@bupt.edu.cn",
+          bio: "热爱编程的前端开发者"
+        };
+        localStorage.setItem("token", "fake-token-123");
+        localStorage.setItem("userInfo", JSON.stringify(userInfo));
+        
+        // 触发登录状态更新（通知导航栏）
+        window.dispatchEvent(new Event('authChange'));
+        
+        // 跳转到首页
+        navigate("/");
+      } else {
+        setError("学号或密码错误（演示用：20240001 / 123456）");
+      }
+      setLoading(false);
+    }, 500);
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2>登录</h2>
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <FaSchool />
+          <span>小邮书</span>
+        </div>
+        <div className="auth-header">
+          <h2>欢迎回来</h2>
+          <p>登录你的北邮校园社交平台</p>
+        </div>
+
         <form onSubmit={handleLogin}>
-          <div style={styles.field}>
+          <div className="form-group">
             <label>学号</label>
-            <input
-              type="text"
-              value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              placeholder="20240001"
-              style={styles.input}
-            />
+            <div className="input-with-icon">
+              <FaUser className="input-icon" />
+              <input
+                type="text"
+                className="input"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                placeholder="请输入学号"
+                required
+              />
+            </div>
           </div>
-          <div style={styles.field}>
+
+          <div className="form-group">
             <label>密码</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="123456"
-              style={styles.input}
-            />
+            <div className="input-with-icon">
+              <FaLock className="input-icon" />
+              <input
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="请输入密码"
+                required
+              />
+            </div>
           </div>
-          {error && <p style={styles.error}>{error}</p>}
-          <button type="submit" style={styles.button}>登录</button>
+
+          {error && <div className="error-message">{error}</div>}
+
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "登录中..." : <><FaSignInAlt /> 登录</>}
+          </button>
         </form>
-        <p>还没有账号？ <Link to="/register">立即注册</Link></p>
+
+        <div className="auth-footer">
+          还没有账号？ <Link to="/register">立即注册</Link>
+        </div>
       </div>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    minHeight: "100vh",
-    backgroundColor: "#f5f5f5",
-  },
-  card: {
-    backgroundColor: "white",
-    padding: "2rem",
-    borderRadius: "8px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-    width: "100%",
-    maxWidth: "400px",
-  },
-  field: { marginBottom: "1rem" },
-  input: {
-    width: "100%",
-    padding: "0.5rem",
-    marginTop: "0.25rem",
-    border: "1px solid #ddd",
-    borderRadius: "4px",
-  },
-  button: {
-    width: "100%",
-    padding: "0.75rem",
-    backgroundColor: "#007bff",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontSize: "1rem",
-  },
-  error: { color: "red", fontSize: "0.875rem" },
 };
 
 export default Login;
