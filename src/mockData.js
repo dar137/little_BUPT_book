@@ -1,4 +1,8 @@
 // src/mockData.js
+// 在 mockData.js 顶部添加这个函数
+const isFavorited = (postId) => {
+  return false; // 或者从 localStorage 读取
+};
 export const posts = [
   {
     id: 1,

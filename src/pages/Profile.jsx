@@ -5,6 +5,7 @@ import {
   FaSignOutAlt, FaCamera, FaThumbsUp, FaComment,
   FaEnvelope, FaIdCard, FaCalendarAlt
 } from "react-icons/fa";
+import { useFavorites } from '../context/FavoriteContext';
 
 const Profile = () => {
   const [userInfo, setUserInfo] = useState(null);
@@ -20,6 +21,7 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const { favoriteIds, toggleFavorite, isFavorited } = useFavorites();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
