@@ -10,7 +10,10 @@ export const posts = [
     content: '想找一个前端和一个后端，项目是关于校园二手交易的...',
     author: '小明',
     time: '10分钟前',
-    tag: '组队'
+    tag: '组队',
+    likes: 5,
+    collects: 2,
+    image: 'https://picsum.photos/400/200?random=1'
   },
   {
     id: 2,
@@ -18,7 +21,10 @@ export const posts = [
     content: '失主叫张三，学号2024xxxx，请失主联系我...',
     author: '热心同学',
     time: '1小时前',
-    tag: '失物招领'
+    tag: '失物招领',
+    likes: 5,
+    collects: 2,
+    image: 'https://picsum.photos/400/200?random=1'
   },
   {
     id: 3,
@@ -26,7 +32,10 @@ export const posts = [
     content: '之前一直用Notion，但最近觉得有点重，有没有轻量一点的推荐？',
     author: '笔记达人',
     time: '3小时前',
-    tag: '学习交流'
+    tag: '学习交流',
+    likes: 5,
+    collects: 2,
+    image: 'https://picsum.photos/400/200?random=1'
   },
 ];
 

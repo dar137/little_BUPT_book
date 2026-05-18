@@ -5,6 +5,7 @@ function CreatePost() {
   // 1. 定义状态：用于存储标题和内容
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [image, setImage] = useState('');
   
   // 2. useNavigate 用于提交后跳转
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ function CreatePost() {
     // 现在只是模拟提交，把数据打印到控制台
     console.log('新帖子的标题：', title);
     console.log('新帖子的内容：', content);
+    console.log('新帖子的图片链接：', image);  
     alert(`帖子已发布！\n标题：${title}\n内容：${content}`);
     
     // 以后这里会换成 fetch 请求，把数据发给后端
@@ -23,6 +25,7 @@ function CreatePost() {
     // 清空表单
     setTitle('');
     setContent('');
+    setImage('');
     
     // 跳转回首页
     navigate('/');
@@ -52,7 +55,38 @@ function CreatePost() {
             }}
           />
         </div>
-
+  {/* 图片链接输入框（新增） */}
+<div style={{ marginBottom: '15px' }}>
+  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+    图片链接（可选）
+  </label>
+  <input
+    type="text"
+    placeholder="请输入图片网址"
+    value={image}
+    onChange={(e) => setImage(e.target.value)}
+    style={{
+      width: '100%',
+      padding: '8px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      fontSize: '14px'
+    }}
+  />
+  {/* 实时预览 */}
+  {image && (
+    <img
+      src={image}
+      alt="预览"
+      style={{
+        maxWidth: '100%',
+        marginTop: '8px',
+        borderRadius: '4px',
+        maxHeight: '200px'
+      }}
+    />
+  )}
+</div>
         {/* 内容输入框 */}
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>

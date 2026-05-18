@@ -90,9 +90,24 @@ function PostDetail() {
         <span>{post.time}</span>
       </div>
       
-      <p style={{ fontSize: '16px', lineHeight: '1.6', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
-        {post.content}
-      </p>
+      {/* 帖子图片（新增） */}
+{post.image && (
+  <img
+    src={post.image}
+    alt={post.title}
+    style={{
+      maxWidth: '100%',
+      maxHeight: '400px',
+      borderRadius: '4px',
+      marginBottom: '15px',
+      display: 'block'
+    }}
+  />
+)}
+
+<p style={{ fontSize: '16px', lineHeight: '1.6', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
+  {post.content}
+</p>
 
       {/* 点赞和收藏按钮 */}
       <div style={{ display: 'flex', gap: '20px', marginTop: '15px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>

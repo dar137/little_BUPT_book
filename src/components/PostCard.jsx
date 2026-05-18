@@ -24,7 +24,12 @@ function PostCard({ post }) {
       <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
         <h3 style={{ margin: '10px 0 5px 0' }}>{post.title}</h3>
       </Link>
-
+      {post.image && (
+  <img src={post.image} alt={post.title} style={{
+    width: '100%', maxHeight: '200px', objectFit: 'cover',
+    borderRadius: '4px', marginBottom: '8px'
+  }} />
+)}
       {/* 内容摘要 */}
       <p style={{ color: '#666', fontSize: '14px' }}>{post.content}</p>
 
