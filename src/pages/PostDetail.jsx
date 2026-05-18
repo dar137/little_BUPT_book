@@ -1,18 +1,25 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { posts, comments as initialComments } from '../mockData';
+import { useFavorites } from '../context/FavoriteContext'; // 1. 导入全局收藏
 
 function PostDetail() {
   const { id } = useParams();
   const post = posts.find(p => p.id == id);
 
-  // 1. 评论列表状态（初始使用假数据）
+  // 评论相关状态（保持不变）
   const [commentList, setCommentList] = useState(initialComments);
-  
-  // 2. 新评论输入框的内容状态
   const [newComment, setNewComment] = useState('');
 
-  // 3. 处理找不到帖子的情况
+  // 点赞状态（本地的，不需要全局）
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(post ? post.likes : 0);
+
+  // 收藏状态改用全局 Context
+  const { toggleFavorite, isFavorited } = useFavorites();
+  const collected = isFavorited(post ? post.id : null);  // 判断是否已收藏
+  const [collectCount, setCollectCount] = useState(post ? post.collects : 0);
+
   if (!post) {
     return (
       <div style={{ padding: '20px' }}>
@@ -23,35 +30,48 @@ function PostDetail() {
     );
   }
 
-  // 4. 筛选出属于当前帖子的评论
   const postComments = commentList.filter(c => c.postId == id);
 
-  // 5. 处理提交新评论
+  // 处理点赞（本地状态切换）
+  const handleLike = () => {
+    if (liked) {
+      setLiked(false);
+      setLikeCount(likeCount - 1);
+    } else {
+      setLiked(true);
+      setLikeCount(likeCount + 1);
+    }
+  };
+
+  // 处理收藏（调用全局 Context 切换）
+  const handleCollect = () => {
+    toggleFavorite(post.id);          // 通知全局状态
+    setCollectCount(collected ? collectCount - 1 : collectCount + 1); // 更新显示数字
+  };
+
   const handleSubmitComment = (e) => {
     e.preventDefault();
-    if (!newComment.trim()) return; // 空内容不提交
+    if (!newComment.trim()) return;
 
     const newCommentObj = {
-      id: commentList.length + 1,        // 临时用简单自增 ID
-      postId: Number(id),                // 关联到当前帖子
-      author: '当前用户',                // 等对接真实用户信息后替换
+      id: commentList.length + 1,
+      postId: Number(id),
+      author: '当前用户',
       content: newComment,
       time: '刚刚'
     };
 
-    // 把新评论添加到评论列表的开头（最新的在上面）
     setCommentList([newCommentObj, ...commentList]);
-    setNewComment(''); // 清空输入框
+    setNewComment('');
   };
 
   return (
     <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-      {/* 返回首页链接 */}
       <Link to="/" style={{ display: 'block', marginBottom: '15px', color: '#1890ff', textDecoration: 'none' }}>
         ← 返回首页
       </Link>
 
-      {/* 帖子内容区域 */}
+      {/* 帖子内容 */}
       <span style={{
         background: '#e6f7ff',
         color: '#1890ff',
@@ -62,7 +82,7 @@ function PostDetail() {
         {post.tag}
       </span>
       
-      <h2 style={{ margin: '15px 0 10px 0',textAlign: 'center'}}>{post.title}</h2>
+      <h2 style={{ margin: '15px 0 10px 0', textAlign: 'center' }}>{post.title}</h2>
       
       <div style={{ color: '#999', fontSize: '12px', marginBottom: '20px' }}>
         <span>{post.author}</span>
@@ -74,11 +94,39 @@ function PostDetail() {
         {post.content}
       </p>
 
+      {/* 点赞和收藏按钮 */}
+      <div style={{ display: 'flex', gap: '20px', marginTop: '15px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
+        <button onClick={handleLike} style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px',
+          border: liked ? '1px solid #ff4d4f' : '1px solid #ddd',
+          borderRadius: '20px',
+          backgroundColor: liked ? '#fff1f0' : 'white',
+          color: liked ? '#ff4d4f' : '#666',
+          cursor: 'pointer', fontSize: '14px'
+        }}>
+          <span>{liked ? '❤️' : '🤍'}</span>
+          <span>点赞 {likeCount}</span>
+        </button>
+
+        <button onClick={handleCollect} style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px',
+          border: collected ? '1px solid #faad14' : '1px solid #ddd',
+          borderRadius: '20px',
+          backgroundColor: collected ? '#fffbe6' : 'white',
+          color: collected ? '#faad14' : '#666',
+          cursor: 'pointer', fontSize: '14px'
+        }}>
+          <span>{collected ? '⭐' : '☆'}</span>
+          <span>收藏 {collectCount}</span>
+        </button>
+      </div>
+
       {/* 评论区 */}
-      <div style={{ marginTop: '30px' }}>
-        <h3 style={{ marginBottom: '15px',textAlign: 'center' }}>💬 评论 ({postComments.length})</h3>
+      <div style={{ marginTop: '20px' }}>
+        <h3 style={{ marginBottom: '15px', textAlign: 'center' }}>💬 评论 ({postComments.length})</h3>
         
-        {/* 评论列表 */}
         {postComments.length > 0 ? (
           postComments.map(comment => (
             <div key={comment.id} style={{
@@ -98,7 +146,6 @@ function PostDetail() {
           <p style={{ color: '#999', textAlign: 'center' }}>暂无评论，快来发表第一条评论吧！</p>
         )}
 
-        {/* 评论输入框 */}
         <form onSubmit={handleSubmitComment} style={{ marginTop: '20px' }}>
           <textarea
             placeholder="写下你的评论..."
@@ -106,28 +153,15 @@ function PostDetail() {
             onChange={(e) => setNewComment(e.target.value)}
             rows="3"
             style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ddd',
-              fontSize: '14px',
-              resize: 'vertical',
-              boxSizing: 'border-box'
+              width: '100%', padding: '8px', borderRadius: '4px',
+              border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box'
             }}
           />
-          <button
-            type="submit"
-            style={{
-              marginTop: '10px',
-              padding: '8px 18px',
-              backgroundColor: '#1890ff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
+          <button type="submit" style={{
+            marginTop: '10px', padding: '8px 18px',
+            backgroundColor: '#1890ff', color: 'white',
+            border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px'
+          }}>
             发表评论
           </button>
         </form>
