@@ -31,3 +31,5 @@ export const comments = [
   { id: 2, postId: 1, author: '小明', content: '欢迎！已经私信你了。', time: '3分钟前' },
   { id: 3, postId: 2, author: '失主本人', content: '谢谢！已经联系了。', time: '30分钟前' },
 ];
+//从所有帖子中，筛选出ID在 favoriteIds集合里的帖子
+  const favoritePosts = posts.filter(post => isFavorited(post.id));
