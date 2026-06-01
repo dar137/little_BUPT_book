@@ -1,6 +1,16 @@
 import { Link } from 'react-router-dom';
+import { FaFlag } from 'react-icons/fa';  // 添加举报图标
 
-function PostCard({ post }) {
+// 增加 onReport 属性
+function PostCard({ post, onReport }) {
+  const handleReportClick = (e) => {
+    e.preventDefault();      // 阻止 Link 跳转
+    e.stopPropagation();     // 阻止事件冒泡
+    if (onReport) {
+      onReport(post);
+    }
+  };
+
   return (
     <div style={{
       border: '1px solid #ddd',
@@ -8,10 +18,9 @@ function PostCard({ post }) {
       padding: '15px',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-      display: 'flex',      // 横排布局
-      gap: '12px'           // 图片和文字之间的间距
+      display: 'flex',
+      gap: '12px'
     }}>
-      {/* 左侧缩略图（如果存在） */}
       {post.image && (
         <img
           src={post.image}
@@ -26,7 +35,6 @@ function PostCard({ post }) {
         />
       )}
 
-      {/* 右侧文字内容 */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{
           background: '#e6f7ff',
@@ -44,10 +52,48 @@ function PostCard({ post }) {
 
         <p style={{ color: '#666', fontSize: '14px' }}>{post.content}</p>
 
-        <div style={{ color: '#999', fontSize: '12px', marginTop: '8px' }}>
-          <span>{post.author}</span>
-          <span style={{ margin: '0 8px' }}>·</span>
-          <span>{post.time}</span>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          color: '#999',
+          fontSize: '12px',
+          marginTop: '8px'
+        }}>
+          <div>
+            <span>{post.author}</span>
+            <span style={{ margin: '0 8px' }}>·</span>
+            <span>{post.time}</span>
+          </div>
+          {/* 添加举报按钮 */}
+          <button
+            onClick={handleReportClick}
+            className="report-btn"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              color: '#999',
+              fontSize: '12px',
+              padding: '4px 8px',
+              borderRadius: '16px',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#fef0f0';
+              e.currentTarget.style.color = '#ff6b6b';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#999';
+            }}
+            title="举报"
+          >
+            <FaFlag /> 举报
+          </button>
         </div>
       </div>
     </div>

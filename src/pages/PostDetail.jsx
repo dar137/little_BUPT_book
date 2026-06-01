@@ -1,24 +1,36 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom'; // 新增 useNavigate
 import { posts, comments as initialComments } from '../mockData';
-import { useFavorites } from '../context/FavoriteContext'; // 1. 导入全局收藏
+import { useFavorites } from '../context/FavoriteContext';
+import { FaFlag } from 'react-icons/fa'; // 新增举报图标
 
 function PostDetail() {
   const { id } = useParams();
+  const navigate = useNavigate(); // 新增
   const post = posts.find(p => p.id == id);
 
-  // 评论相关状态（保持不变）
   const [commentList, setCommentList] = useState(initialComments);
   const [newComment, setNewComment] = useState('');
 
-  // 点赞状态（本地的，不需要全局）
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post ? post.likes : 0);
 
-  // 收藏状态改用全局 Context
   const { toggleFavorite, isFavorited } = useFavorites();
-  const collected = isFavorited(post ? post.id : null);  // 判断是否已收藏
+  const collected = isFavorited(post ? post.id : null);
   const [collectCount, setCollectCount] = useState(post ? post.collects : 0);
+
+  // 新增：举报处理函数
+  const handleReport = () => {
+    if (!post) return;
+    // 存储被举报的帖子信息
+    localStorage.setItem('reportTarget', JSON.stringify({
+      targetType: 'post',
+      targetId: post.id,
+      targetTitle: post.title,
+      targetAuthor: post.author,
+    }));
+    navigate('/report');
+  };
 
   if (!post) {
     return (
@@ -32,7 +44,6 @@ function PostDetail() {
 
   const postComments = commentList.filter(c => c.postId == id);
 
-  // 处理点赞（本地状态切换）
   const handleLike = () => {
     if (liked) {
       setLiked(false);
@@ -43,10 +54,9 @@ function PostDetail() {
     }
   };
 
-  // 处理收藏（调用全局 Context 切换）
   const handleCollect = () => {
-    toggleFavorite(post.id);          // 通知全局状态
-    setCollectCount(collected ? collectCount - 1 : collectCount + 1); // 更新显示数字
+    toggleFavorite(post.id);
+    setCollectCount(collected ? collectCount - 1 : collectCount + 1);
   };
 
   const handleSubmitComment = (e) => {
@@ -67,9 +77,38 @@ function PostDetail() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-      <Link to="/" style={{ display: 'block', marginBottom: '15px', color: '#1890ff', textDecoration: 'none' }}>
-        ← 返回首页
-      </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+        <Link to="/" style={{ color: '#1890ff', textDecoration: 'none' }}>
+          ← 返回首页
+        </Link>
+        {/* 新增举报按钮 */}
+        <button
+          onClick={handleReport}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            color: '#999',
+            fontSize: '13px',
+            padding: '4px 8px',
+            borderRadius: '16px',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fef0f0';
+            e.currentTarget.style.color = '#ff6b6b';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#999';
+          }}
+        >
+          <FaFlag /> 举报
+        </button>
+      </div>
 
       {/* 帖子内容 */}
       <span style={{
@@ -90,24 +129,23 @@ function PostDetail() {
         <span>{post.time}</span>
       </div>
       
-      {/* 帖子图片（新增） */}
-{post.image && (
-  <img
-    src={post.image}
-    alt={post.title}
-    style={{
-      maxWidth: '100%',
-      maxHeight: '400px',
-      borderRadius: '4px',
-      marginBottom: '15px',
-      display: 'block'
-    }}
-  />
-)}
+      {post.image && (
+        <img
+          src={post.image}
+          alt={post.title}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '400px',
+            borderRadius: '4px',
+            marginBottom: '15px',
+            display: 'block'
+          }}
+        />
+      )}
 
-<p style={{ fontSize: '16px', lineHeight: '1.6', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
-  {post.content}
-</p>
+      <p style={{ fontSize: '16px', lineHeight: '1.6', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
+        {post.content}
+      </p>
 
       {/* 点赞和收藏按钮 */}
       <div style={{ display: 'flex', gap: '20px', marginTop: '15px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>

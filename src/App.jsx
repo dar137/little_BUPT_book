@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { FaHome, FaPen, FaSearch, FaFlag, FaUser, FaSignOutAlt, FaBell, FaPlus } from 'react-icons/fa';
+import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt } from 'react-icons/fa';
 import './App.css';
 import Home from './pages/Home';
 import PostDetail from './pages/PostDetail';
@@ -74,10 +74,6 @@ const Navbar = () => {
             <FaSearch className="nav-icon" />
             <span>搜索</span>
           </Link>
-          <Link to="/report" className="nav-item">
-            <FaFlag className="nav-icon" />
-            <span>举报</span>
-          </Link>
           
           {isLoggedIn ? (
             <div className="user-menu">
@@ -85,7 +81,7 @@ const Navbar = () => {
                 <FaUser className="nav-icon" />
                 <span>{userName}</span>
               </button>
-              <button className="logout-btn-nav" onClick={handleLogout}>
+              <button className="logout-btn-nav" onClick={handleLogout} title="退出登录">
                 <FaSignOutAlt />
               </button>
             </div>

@@ -115,3 +115,19 @@
     display: none;
   }
 }
+/* 帖子网格卡片悬浮效果 */
+.post-grid-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+/* 响应式调整 */
+@media (max-width: 640px) {
+  .profile-container {
+    padding: 12px !important;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px;
+  }
+}

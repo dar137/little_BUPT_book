@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Report = () => {
   const [formData, setFormData] = useState({
@@ -9,6 +9,25 @@ const Report = () => {
   });
   const [submitted, setSubmitted] = useState(false);
   const [status, setStatus] = useState(null);
+  const [preloadedTitle, setPreloadedTitle] = useState(""); // 新增：存储被举报内容的标题
+
+  // 组件加载时，检查是否有从其他页面传来的举报信息
+  useEffect(() => {
+    const reportTarget = localStorage.getItem("reportTarget");
+    if (reportTarget) {
+      const target = JSON.parse(reportTarget);
+      setFormData(prev => ({
+        ...prev,
+        targetType: target.targetType || "post",
+        targetId: target.targetId || "",
+      }));
+      if (target.targetTitle) {
+        setPreloadedTitle(target.targetTitle);
+      }
+      // 读取后清除，避免重复使用
+      localStorage.removeItem("reportTarget");
+    }
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -39,6 +58,11 @@ const Report = () => {
     <div style={styles.container}>
       <div style={styles.card}>
         <h2>举报/反馈</h2>
+        {preloadedTitle && (
+          <div style={styles.preloadNotice}>
+            <strong>正在举报：</strong> {preloadedTitle}
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <div style={styles.field}>
             <label>举报类型</label>
@@ -49,7 +73,15 @@ const Report = () => {
           </div>
           <div style={styles.field}>
             <label>帖子ID / 用户ID</label>
-            <input type="text" name="targetId" value={formData.targetId} onChange={handleChange} placeholder="请输入ID" style={styles.input} required />
+            <input
+              type="text"
+              name="targetId"
+              value={formData.targetId}
+              onChange={handleChange}
+              placeholder="请输入ID"
+              style={styles.input}
+              required
+            />
           </div>
           <div style={styles.field}>
             <label>举报原因</label>
@@ -63,7 +95,13 @@ const Report = () => {
           </div>
           <div style={styles.field}>
             <label>详细描述（可选）</label>
-            <textarea name="description" rows="4" value={formData.description} onChange={handleChange} style={styles.textarea} />
+            <textarea
+              name="description"
+              rows="4"
+              value={formData.description}
+              onChange={handleChange}
+              style={styles.textarea}
+            />
           </div>
           <button type="submit" style={styles.button}>提交举报</button>
         </form>
@@ -79,6 +117,15 @@ const styles = {
   input: { width: "100%", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "4px" },
   textarea: { width: "100%", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "4px", fontFamily: "inherit" },
   button: { width: "100%", padding: "0.75rem", backgroundColor: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" },
+  preloadNotice: {
+    backgroundColor: "#e6f7ff",
+    border: "1px solid #91d5ff",
+    borderRadius: "4px",
+    padding: "8px 12px",
+    marginBottom: "16px",
+    fontSize: "14px",
+    color: "#0050b3"
+  }
 };
 
 export default Report;
