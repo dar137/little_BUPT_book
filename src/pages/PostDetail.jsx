@@ -1,12 +1,11 @@
+
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom'; // 新增 useNavigate
+import { useParams, Link } from 'react-router-dom';
 import { posts, comments as initialComments } from '../mockData';
 import { useFavorites } from '../context/FavoriteContext';
-import { FaFlag } from 'react-icons/fa'; // 新增举报图标
 
 function PostDetail() {
   const { id } = useParams();
-  const navigate = useNavigate(); // 新增
   const post = posts.find(p => p.id == id);
 
   const [commentList, setCommentList] = useState(initialComments);
@@ -19,25 +18,15 @@ function PostDetail() {
   const collected = isFavorited(post ? post.id : null);
   const [collectCount, setCollectCount] = useState(post ? post.collects : 0);
 
-  // 新增：举报处理函数
-  const handleReport = () => {
-    if (!post) return;
-    // 存储被举报的帖子信息
-    localStorage.setItem('reportTarget', JSON.stringify({
-      targetType: 'post',
-      targetId: post.id,
-      targetTitle: post.title,
-      targetAuthor: post.author,
-    }));
-    navigate('/report');
-  };
+  // 返回按钮按下状态
+  const [returnPressed, setReturnPressed] = useState(false);
 
   if (!post) {
     return (
-      <div style={{ padding: '20px' }}>
+      <div style={{ padding: '20px', textAlign: 'center' }}>
         <h2>帖子未找到</h2>
         <p>抱歉，ID为 {id} 的帖子不存在。</p>
-        <Link to="/">← 返回首页</Link>
+        <Link to="/" style={{ color: '#1890ff' }}>← 返回首页</Link>
       </div>
     );
   }
@@ -75,111 +64,166 @@ function PostDetail() {
     setNewComment('');
   };
 
+  // 多张图片处理
+  const images = post.images && post.images.length > 0 ? post.images : (post.image ? [post.image] : []);
+
   return (
     <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <Link to="/" style={{ color: '#1890ff', textDecoration: 'none' }}>
-          ← 返回首页
-        </Link>
-        {/* 新增举报按钮 */}
-        <button
-          onClick={handleReport}
+      {/* ====== 顶部栏：返回按钮（左） + 分类标签（右） ====== */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <Link
+          to="/"
+          onMouseDown={() => setReturnPressed(true)}
+          onMouseUp={() => setReturnPressed(false)}
+          onMouseLeave={() => setReturnPressed(false)}
           style={{
-            background: 'none',
-            border: 'none',
+            display: 'inline-block',
+            padding: '6px 14px',
+            backgroundColor: returnPressed ? '#d9d9d9' : '#ffffff',
+            borderRadius: '20px',
+            color: '#333',
+            textDecoration: 'none',
+            fontSize: '14px',
+            border: '1px solid #ddd',
             cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            color: '#999',
-            fontSize: '13px',
-            padding: '4px 8px',
-            borderRadius: '16px',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#fef0f0';
-            e.currentTarget.style.color = '#ff6b6b';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#999';
+            userSelect: 'none',
+            transition: 'background-color 0.1s'
           }}
         >
-          <FaFlag /> 举报
-        </button>
+          ← 返回首页
+        </Link>
+
+        <span style={{
+          background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+          color: '#1890ff',
+          padding: '3px 12px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          fontWeight: '500'
+        }}>
+          {post.tag}
+        </span>
       </div>
 
-      {/* 帖子内容 */}
-      <span style={{
-        background: '#e6f7ff',
-        color: '#1890ff',
-        padding: '2px 8px',
-        borderRadius: '4px',
-        fontSize: '12px'
+      {/* ==================== 帖子内容卡片 ==================== */}
+      <div style={{
+        backgroundColor: '#fff',
+        borderRadius: '12px',
+        padding: '20px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        border: '1px solid #eee',
+        marginBottom: '24px'
       }}>
-        {post.tag}
-      </span>
-      
-      <h2 style={{ margin: '15px 0 10px 0', textAlign: 'center' }}>{post.title}</h2>
-      
-      <div style={{ color: '#999', fontSize: '12px', marginBottom: '20px' }}>
-        <span>{post.author}</span>
-        <span style={{ margin: '0 8px' }}>·</span>
-        <span>{post.time}</span>
-      </div>
-      
-      {post.image && (
-        <img
-          src={post.image}
-          alt={post.title}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '400px',
-            borderRadius: '4px',
-            marginBottom: '15px',
-            display: 'block'
-          }}
-        />
-      )}
+        {/* 作者信息 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: '#e6f7ff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
+            color: '#1890ff'
+          }}>
+            👤
+          </div>
+          <span style={{ fontSize: '15px', fontWeight: '500', color: '#333' }}>
+            {typeof post.author === 'object' ? post.author.nickname : post.author}
+          </span>
+        </div>
 
-      <p style={{ fontSize: '16px', lineHeight: '1.6', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
-        {post.content}
-      </p>
+        {/* 标题 */}
+        <h2 style={{ textAlign: 'center', margin: '10px 0 20px 0', fontSize: '22px', fontWeight: '600', color: '#1a1a1a' }}>
+          {post.title}
+        </h2>
 
-      {/* 点赞和收藏按钮 */}
-      <div style={{ display: 'flex', gap: '20px', marginTop: '15px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
-        <button onClick={handleLike} style={{
-          display: 'flex', alignItems: 'center', gap: '6px',
-          padding: '8px 16px',
-          border: liked ? '1px solid #ff4d4f' : '1px solid #ddd',
-          borderRadius: '20px',
-          backgroundColor: liked ? '#fff1f0' : 'white',
-          color: liked ? '#ff4d4f' : '#666',
-          cursor: 'pointer', fontSize: '14px'
+        {/* 图片区域 */}
+        {images.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            {images.map((img, index) => (
+              <img
+                key={index}
+                src={img}
+                alt={`${post.title} ${index + 1}`}
+                style={{
+                  display: 'block',
+                  maxWidth: '100%',
+                  height: 'auto',
+                  maxHeight: '500px',
+                  margin: '0 auto 10px',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 正文 */}
+        <p style={{
+          fontSize: '16px',
+          lineHeight: '1.6',
+          color: '#333',
+          margin: '0 0 15px 0',
+          wordBreak: 'break-word'
         }}>
-          <span>{liked ? '❤️' : '🤍'}</span>
-          <span>点赞 {likeCount}</span>
-        </button>
+          {post.content}
+        </p>
 
-        <button onClick={handleCollect} style={{
-          display: 'flex', alignItems: 'center', gap: '6px',
-          padding: '8px 16px',
-          border: collected ? '1px solid #faad14' : '1px solid #ddd',
-          borderRadius: '20px',
-          backgroundColor: collected ? '#fffbe6' : 'white',
-          color: collected ? '#faad14' : '#666',
-          cursor: 'pointer', fontSize: '14px'
+        {/* 发帖时间（右下角） */}
+        <div style={{ textAlign: 'right', color: '#999', fontSize: '12px', marginBottom: '15px' }}>
+           {post.time}
+        </div>
+
+        {/* 互动栏 */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '24px',
+          padding: '15px 0 0 0',
+          borderTop: '1px solid #eee'
         }}>
-          <span>{collected ? '⭐' : '☆'}</span>
-          <span>收藏 {collectCount}</span>
-        </button>
+          <button onClick={handleLike} style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: liked ? '#ff4d4f' : '#999', fontSize: '14px',
+            padding: '4px 8px', borderRadius: '8px'
+          }}>
+            <span style={{ fontSize: '16px' }}>{liked ? '❤️' : '🤍'}</span>
+            <span>{likeCount}</span>
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#999', fontSize: '14px' }}>
+            <span style={{ fontSize: '16px' }}>💬</span>
+            <span>{postComments.length}</span>
+          </div>
+
+          <button onClick={handleCollect} style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: collected ? '#faad14' : '#999', fontSize: '14px',
+            padding: '4px 8px', borderRadius: '8px'
+          }}>
+            <span style={{ fontSize: '16px' }}>{collected ? '⭐' : '☆'}</span>
+            <span>{collectCount}</span>
+          </button>
+        </div>
       </div>
 
-      {/* 评论区 */}
-      <div style={{ marginTop: '20px' }}>
-        <h3 style={{ marginBottom: '15px', textAlign: 'center' }}>💬 评论 ({postComments.length})</h3>
-        
+      {/* ==================== 评论区卡片 ==================== */}
+      <div style={{
+        backgroundColor: '#fff',
+        borderRadius: '12px',
+        padding: '20px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        border: '1px solid #eee'
+      }}>
+        <h3 style={{ marginBottom: '15px', fontSize: '16px', fontWeight: '600', color: '#333' }}>
+          💬 评论 ({postComments.length})
+        </h3>
+
         {postComments.length > 0 ? (
           postComments.map(comment => (
             <div key={comment.id} style={{
@@ -206,17 +250,19 @@ function PostDetail() {
             onChange={(e) => setNewComment(e.target.value)}
             rows="3"
             style={{
-              width: '100%', padding: '8px', borderRadius: '4px',
+              width: '100%', padding: '10px', borderRadius: '8px',
               border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box'
             }}
           />
           <button type="submit" style={{
-            marginTop: '10px', padding: '8px 18px',
+            marginTop: '10px', padding: '8px 20px',
             backgroundColor: '#1890ff', color: 'white',
-            border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px'
+            border: 'none', borderRadius: '20px', cursor: 'pointer', fontSize: '14px',
+            float: 'right'
           }}>
             发表评论
           </button>
+          <div style={{ clear: 'both' }}></div>
         </form>
       </div>
     </div>
