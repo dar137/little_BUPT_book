@@ -15,7 +15,7 @@ function Home() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h2>🏠 首页信息流</h2>
+      
 
       {/* 3. 放入标签栏组件，传入当前选中的标签和切换标签的函数 */}
       <CategoryTabs
