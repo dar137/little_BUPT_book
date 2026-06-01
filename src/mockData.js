@@ -1,8 +1,3 @@
-// src/mockData.js
-// 在 mockData.js 顶部添加这个函数
-const isFavorited = (postId) => {
-  return false; // 或者从 localStorage 读取
-};
 export const posts = [
   {
     id: 1,
@@ -13,7 +8,10 @@ export const posts = [
     tag: '组队',
     likes: 5,
     collects: 2,
-    image: 'https://picsum.photos/400/200?random=1'
+    image: 'https://picsum.photos/400/200?random=1',
+    likesCount: 5,
+    commentsCount: 2,
+    collectsCount: 2
   },
   {
     id: 2,
@@ -22,9 +20,12 @@ export const posts = [
     author: '热心同学',
     time: '1小时前',
     tag: '失物招领',
-    likes: 5,
-    collects: 2,
-    image: 'https://picsum.photos/400/200?random=1'
+    likes: 10,
+    collects: 3,
+    image: 'https://picsum.photos/400/200?random=2',
+    likesCount: 10,
+    commentsCount: 1,
+    collectsCount: 3
   },
   {
     id: 3,
@@ -33,9 +34,12 @@ export const posts = [
     author: '笔记达人',
     time: '3小时前',
     tag: '学习交流',
-    likes: 5,
-    collects: 2,
-    image: 'https://picsum.photos/400/200?random=1'
+    likes: 8,
+    collects: 1,
+    image: 'https://picsum.photos/400/200?random=3',
+    likesCount: 8,
+    commentsCount: 0,
+    collectsCount: 1
   },
 ];
 
@@ -44,5 +48,3 @@ export const comments = [
   { id: 2, postId: 1, author: '小明', content: '欢迎！已经私信你了。', time: '3分钟前' },
   { id: 3, postId: 2, author: '失主本人', content: '谢谢！已经联系了。', time: '30分钟前' },
 ];
-//从所有帖子中，筛选出ID在 favoriteIds集合里的帖子
-  const favoritePosts = posts.filter(post => isFavorited(post.id));

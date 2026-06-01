@@ -2,12 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import { FavoriteProvider } from './context/FavoriteContext'  // 1. 导入
+import { FavoriteProvider } from './context/FavoriteContext'
+import { AuthProvider } from './context/AuthContext'   // ← 新增导入
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <FavoriteProvider>   {/* 2. 包裹 App */}
-      <App />
-    </FavoriteProvider>
+    <AuthProvider>               {/* ← 新增，放在 FavoriteProvider 外面 */}
+      <FavoriteProvider>
+        <App />
+      </FavoriteProvider>
+    </AuthProvider>
   </StrictMode>,
 )
