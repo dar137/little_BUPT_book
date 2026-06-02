@@ -1,0 +1,11 @@
+venv/
+lbk/
+.venv/
+
+__pycache__/
+*.pyc
+
+.env
+
+app/uploads/
+xiaoyoushu-backend/app/uploads/
