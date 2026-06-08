@@ -108,7 +108,6 @@ function PostDetail() {
     try {
       await postAPI.addComment(post.id, { content: newComment });
       setNewComment('');
-      // 重新获取详情以刷新评论列表
       await fetchPostDetail();
     } catch (err) {
       alert('评论失败：' + (err.message || '请稍后重试'));
@@ -130,7 +129,6 @@ function PostDetail() {
       await postAPI.addComment(post.id, { content: replyContent, parentId: commentId });
       setReplyContent('');
       setReplyingTo(null);
-      // 重新获取详情以刷新评论列表
       await fetchPostDetail();
     } catch (err) {
       alert('回复失败：' + (err.message || '请稍后重试'));
@@ -192,10 +190,7 @@ function PostDetail() {
     );
   }
 
-  // ===== 图片数组（兼容后端返回的 images 字段） =====
   const images = post.images || [];
-
-  // ===== 评论列表 =====
   const postComments = post.comments || [];
 
   return (
@@ -254,8 +249,19 @@ function PostDetail() {
         border: '1px solid #eee',
         marginBottom: '24px'
       }}>
-        {/* 作者信息 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
+        {/* 作者信息（可点击跳转到用户主页） */}
+        <Link
+          to={`/user/${post.author?.id}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            marginBottom: '12px',
+            textDecoration: 'none',
+            color: 'inherit'
+          }}
+        >
           {post.author?.avatar ? (
             <img
               src={post.author.avatar}
@@ -278,7 +284,7 @@ function PostDetail() {
           <span style={{ fontSize: '15px', fontWeight: '500', color: '#333' }}>
             {post.author?.nickname || '匿名用户'}
           </span>
-        </div>
+        </Link>
 
         {/* 标题 */}
         <h2 style={{ textAlign: 'center', margin: '10px 0 20px 0', fontSize: '22px', fontWeight: '600', color: '#1a1a1a' }}>
@@ -376,7 +382,6 @@ function PostDetail() {
               </div>
               <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555' }}>{comment.content}</p>
 
-              {/* 右下角胶囊回复按钮 或 回复输入框 */}
               {replyingTo !== comment.id ? (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
                   <button
@@ -453,7 +458,6 @@ function PostDetail() {
           <p style={{ color: '#999', textAlign: 'center' }}>暂无评论，快来发表第一条评论吧！</p>
         )}
 
-        {/* 发表新评论 */}
         <form onSubmit={handleSubmitComment} style={{ marginTop: '20px' }}>
           <textarea
             placeholder="写下你的评论..."

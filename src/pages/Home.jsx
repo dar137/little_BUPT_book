@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import CategoryTabs from '../components/CategoryTabs';
 import { postAPI } from '../api';
+import { posts as mockPosts } from '../mockData';   // ← 导入假数据作为降级
 
 function Home() {
   const navigate = useNavigate();
@@ -10,11 +11,13 @@ function Home() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [usingMock, setUsingMock] = useState(false);   // ← 标记是否正在使用假数据
 
-  // 获取帖子列表
   const fetchPosts = async (category) => {
     setLoading(true);
     setError(null);
+    setUsingMock(false);
+
     try {
       const params = {};
       if (category && category !== '全部') {
@@ -23,8 +26,14 @@ function Home() {
       const result = await postAPI.getList(params);
       setPosts(result.list || []);
     } catch (err) {
-      console.error('获取帖子失败:', err);
-      setError(err.message || '加载失败，请稍后重试');
+      console.warn('后端不可用，降级使用假数据:', err.message);
+      setUsingMock(true);
+      // 降级：用假数据，并根据分类过滤
+      if (category && category !== '全部') {
+        setPosts(mockPosts.filter(p => p.category === category));
+      } else {
+        setPosts(mockPosts);
+      }
     } finally {
       setLoading(false);
     }
@@ -34,7 +43,6 @@ function Home() {
     fetchPosts(activeTag);
   }, [activeTag]);
 
-  // 处理举报点击（保留原有逻辑，但需适配新的 post 结构）
   const handleReport = (post) => {
     localStorage.setItem('reportTarget', JSON.stringify({
       targetType: 'post',
@@ -52,19 +60,21 @@ function Home() {
         onTagChange={setActiveTag}
       />
 
+      {usingMock && (
+        <p style={{ textAlign: 'center', color: '#faad14', fontSize: '12px', margin: '8px 0' }}>
+          ⚠️ 后端未连接，当前显示模拟数据
+        </p>
+      )}
+
       {loading ? (
         <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>
           加载中...
         </p>
-      ) : error ? (
-        <p style={{ textAlign: 'center', color: '#ff4d4f', marginTop: '40px' }}>
-          {error}
-        </p>
       ) : posts.length > 0 ? (
         posts.map(post => (
-          <PostCard 
-            key={post.id} 
-            post={post} 
+          <PostCard
+            key={post.id}
+            post={post}
             onReport={handleReport}
           />
         ))

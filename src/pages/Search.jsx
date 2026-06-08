@@ -8,61 +8,163 @@ const Search = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // 分类筛选
+  const categories = ["全部", "组队", "失物招领", "学习交流"];
+  const [activeCate, setActiveCate] = useState("全部");
+
+  // 搜索历史
+  const [history, setHistory] = useState([]);
+
+  // 初始化读取历史
+  useEffect(() => {
+    const saved = localStorage.getItem("searchHistory");
+    if (saved) setHistory(JSON.parse(saved));
+  }, []);
+
+  // 保存历史
+  const saveHistory = (kw) => {
+    if (!kw.trim()) return;
+    let newHistory = [kw, ...history.filter((h) => h !== kw)];
+    if (newHistory.length > 10) newHistory = newHistory.slice(0, 10);
+    setHistory(newHistory);
+    localStorage.setItem("searchHistory", JSON.stringify(newHistory));
+  };
+
+  // 删除单条历史
+  const removeHistory = (kw) => {
+    const newHistory = history.filter((h) => h !== kw);
+    setHistory(newHistory);
+    localStorage.setItem("searchHistory", JSON.stringify(newHistory));
+  };
+
+  // 清空全部历史
+  const clearAllHistory = () => {
+    setHistory([]);
+    localStorage.removeItem("searchHistory");
+  };
+
+  // 搜索（关键词 + 分类）
   useEffect(() => {
     if (!keyword.trim()) {
       setResults([]);
       setError(null);
       return;
     }
-
     const timer = setTimeout(() => {
-      performSearch(keyword);
+      performSearch(keyword, activeCate);
     }, 500);
-
     return () => clearTimeout(timer);
-  }, [keyword]);
+  }, [keyword, activeCate]);
 
-  const performSearch = async (kw) => {
+  const performSearch = async (kw, cate) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await postAPI.search({ keyword: kw });
+      const params = { keyword: kw };
+      if (cate && cate !== "全部") params.category = cate;
+
+      const data = await postAPI.search(params);
       setResults(data.list || []);
+      saveHistory(kw);
     } catch (err) {
       console.error("搜索失败:", err);
-      setError(err.message || "搜索失败，请稍后重试");
+      setError("搜索失败，请稍后重试");
       setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // 点击历史记录快速搜索
+  const handleHistoryClick = (kw) => {
+    setKeyword(kw);
+  };
+
   return (
     <div style={styles.container}>
-      <h2>🔍 搜索</h2>
+      <div style={styles.header}>
+        <h2 style={styles.title}>🔍 搜索帖子</h2>
+        <p style={styles.subTitle}>输入关键词查找你感兴趣的内容</p>
+      </div>
+
+      {/* 搜索框 */}
       <input
         type="text"
-        placeholder="输入关键词..."
+        placeholder="输入标题、内容关键词..."
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
         style={styles.searchInput}
+        autoFocus
       />
-      {loading && <p style={{ color: '#999' }}>搜索中...</p>}
-      {error && <p style={{ color: '#ff4d4f' }}>{error}</p>}
+
+      {/* 分类筛选 */}
+      <div style={styles.cateWrap}>
+        {categories.map((c) => (
+          <div
+            key={c}
+            onClick={() => setActiveCate(c)}
+            style={{
+              ...styles.cateItem,
+              backgroundColor: activeCate === c ? "#1677ff" : "#f5f5f5",
+              color: activeCate === c ? "#fff" : "#333",
+            }}
+          >
+            {c}
+          </div>
+        ))}
+      </div>
+
+      {/* 搜索历史 */}
+      {keyword.trim() === "" && history.length > 0 && (
+        <div style={styles.historySection}>
+          <div style={styles.historyHeader}>
+            <span>🕓 最近搜索</span>
+            <span onClick={clearAllHistory} style={styles.clearAll}>
+              清空全部
+            </span>
+          </div>
+          <div style={styles.historyList}>
+            {history.map((kw, idx) => (
+              <div key={idx} style={styles.historyItem}>
+                <span onClick={() => handleHistoryClick(kw)} style={styles.hText}>
+                  {kw}
+                </span>
+                <span onClick={() => removeHistory(kw)} style={styles.hDel}>
+                  ✕
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 加载 & 错误 */}
+      {loading && <div style={styles.tip}>🔍 正在搜索中...</div>}
+      {error && <div style={styles.tipError}>{error}</div>}
+
+      {/* 结果 */}
       <div style={styles.results}>
         {results.map((post) => (
           <div key={post.id} style={styles.card}>
             <Link to={`/post/${post.id}`} style={styles.link}>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: '16px' }}>{post.title}</h3>
-              <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{post.summary || post.content?.slice(0, 100)}</p>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                {post.author?.nickname} · {post.createdAt}
+              {post.coverImage && <img src={post.coverImage} alt="" style={styles.cover} />}
+              <div style={styles.cardBody}>
+                <h3 style={styles.cardTitle}>{post.title}</h3>
+                <p style={styles.cardSummary}>
+                  {post.summary || post.content?.slice(0, 100) + "..."}
+                </p>
+                <div style={styles.cardFooter}>
+                  <span>{post.author?.nickname || "匿名"}</span>
+                  <span>{post.createdAt}</span>
+                  <span style={{ color: "#1677ff" }}>{post.category}</span>
+                </div>
               </div>
             </Link>
           </div>
         ))}
+
         {!loading && !error && keyword.trim() && results.length === 0 && (
-          <p style={{ color: '#999', textAlign: 'center' }}>暂无搜索结果</p>
+          <div style={styles.empty}>😶‍🌫️ 暂无相关结果</div>
         )}
       </div>
     </div>
@@ -70,11 +172,81 @@ const Search = () => {
 };
 
 const styles = {
-  container: { maxWidth: "800px", margin: "0 auto", padding: "1rem" },
-  searchInput: { width: "100%", padding: "0.75rem", fontSize: "1rem", border: "1px solid #ddd", borderRadius: "8px" },
-  results: { marginTop: "1rem" },
-  card: { padding: "1rem", borderBottom: "1px solid #eee" },
-  link: { textDecoration: "none", color: "#333" },
+  container: { maxWidth: "800px", margin: "0 auto", padding: "2rem 1rem" },
+  header: { textAlign: "center", marginBottom: "1rem" },
+  title: { fontSize: "22px", fontWeight: 600, margin: "0 0 4px 0" },
+  subTitle: { fontSize: "14px", color: "#888", margin: 0 },
+
+  searchInput: {
+    width: "100%",
+    padding: "12px 14px",
+    border: "1px solid #eee",
+    borderRadius: "10px",
+    fontSize: "15px",
+    outline: "none",
+    boxSizing: "border-box",
+    marginBottom: "10px",
+  },
+
+  // 分类
+  cateWrap: {
+    display: "flex",
+    gap: "8px",
+    marginBottom: "16px",
+    flexWrap: "wrap",
+  },
+  cateItem: {
+    padding: "6px 12px",
+    borderRadius: "20px",
+    fontSize: "14px",
+    cursor: "pointer",
+  },
+
+  // 历史记录
+  historySection: { marginBottom: "20px" },
+  historyHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "14px",
+    color: "#666",
+    marginBottom: "8px",
+  },
+  clearAll: { color: "#1677ff", cursor: "pointer" },
+  historyList: { display: "flex", flexWrap: "wrap", gap: "8px" },
+  historyItem: {
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: "#f7f8fa",
+    padding: "4px 10px",
+    borderRadius: "6px",
+    fontSize: "14px",
+    gap: "6px",
+  },
+  hText: { cursor: "pointer" },
+  hDel: { color: "#999", cursor: "pointer", fontSize: "12px" },
+
+  tip: { textAlign: "center", color: "#666", margin: "10px 0" },
+  tipError: { textAlign: "center", color: "#ff4d4f", margin: "10px 0" },
+
+  // 结果卡片
+  results: { marginTop: "10px" },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: "12px",
+    padding: "12px",
+    marginBottom: "8px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    display: "flex",
+    gap: "10px",
+  },
+  link: { display: "flex", gap: "10px", textDecoration: "none", color: "inherit", flex: 1 },
+  cover: { width: "80px", height: "60px", objectFit: "cover", borderRadius: "8px" },
+  cardBody: { flex: 1, justifyContent: "center" },
+  cardTitle: { fontSize: "16px", fontWeight: 600, margin: "0 0 4px 0" },
+  cardSummary: { fontSize: "14px", color: "#666", margin: "0 0 4px 0" },
+  cardFooter: { fontSize: "12px", color: "#999", display: "flex", gap: "10px" },
+
+  empty: { textAlign: "center", color: "#999", padding: "40px 0" },
 };
 
 export default Search;
