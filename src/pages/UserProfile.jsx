@@ -5,7 +5,27 @@ import PostCard from '../components/PostCard';
 import { FaUser, FaEnvelope, FaIdCard } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 
-// 模拟数据（当后端未就绪时使用）
+// ------------------------------
+// 带 Token 的请求封装（与 Profile 中保持一致）
+// ------------------------------
+const fetchWithAuth = async (url, options = {}) => {
+  const token = localStorage.getItem("token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+};
+
+// 模拟数据（降级用）
 const mockUserData = {
   101: { id: 101, name: '小明', studentId: '20240001', bio: '热爱摄影和前端', avatar: '', email: 'xiaoming@bupt.edu.cn' },
   102: { id: 102, name: '热心同学', studentId: '20240002', bio: '失物招领达人', avatar: '' },
@@ -33,27 +53,25 @@ const UserProfile = () => {
   useEffect(() => {
     const fetchUserData = async () => {
       setLoading(true);
+      setError('');
       try {
-        // TODO: 替换为真实后端接口
-        // const res = await fetch(`/api/user/${userId}`);
-        // const userData = await res.json();
-        // const postsRes = await fetch(`/api/user/${userId}/posts`);
-        // const userPosts = await postsRes.json();
-
-        // 临时使用模拟数据
-        setTimeout(() => {
-          const userData = mockUserData[userId];
-          const userPosts = mockUserPosts[userId] || [];
-          if (userData) {
-            setUser(userData);
-            setPosts(userPosts);
-          } else {
-            setError('用户不存在');
-          }
-          setLoading(false);
-        }, 300);
+        // 优先尝试后端接口
+        const userData = await fetchWithAuth(`/api/user/${userId}`);
+        const postsData = await fetchWithAuth(`/api/user/${userId}/posts`);
+        setUser(userData);
+        setPosts(postsData.list || postsData);
       } catch (err) {
-        setError('加载失败，请稍后重试');
+        console.warn('后端获取用户信息失败，使用模拟数据', err);
+        // 降级：使用模拟数据
+        const mockUser = mockUserData[userId];
+        const mockPosts = mockUserPosts[userId] || [];
+        if (mockUser) {
+          setUser(mockUser);
+          setPosts(mockPosts);
+        } else {
+          setError('用户不存在');
+        }
+      } finally {
         setLoading(false);
       }
     };
