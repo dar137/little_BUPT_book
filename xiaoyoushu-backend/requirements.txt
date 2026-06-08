@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-sqlalchemy
+pymysql
+python-dotenv
+pyjwt
+werkzeug
+marshmallow
+requests
+gunicorn

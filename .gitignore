@@ -7,10 +7,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Frontend dependencies and build output
 node_modules
 dist
 dist-ssr
 *.local
+
+# Python virtual environments
+venv/
+.venv/
+lbk/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+
+# Upload files
+app/uploads/
+xiaoyoushu-backend/app/uploads/
 
 # Editor directories and files
 .vscode/*
