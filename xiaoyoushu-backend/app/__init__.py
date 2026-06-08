@@ -1,23 +1,25 @@
 from flask import Flask
-from .config import Config
-from .extensions import db, cors
-from flask_cors import CORS
+
+from app.config import Config
+from app.extensions import db, cors
+
 
 def create_app():
     app = Flask(__name__)
+
     app.config.from_object(Config)
 
-    CORS(app, origins="*")
-    
     db.init_app(app)
+    cors.init_app(app)
 
-    cors.init_app(
-        app,
-        resources={r"/api/*": {"origins": "*"}},
-        supports_credentials=True
-    )
+    from app.routes.users import user_bp
+    from app.routes.posts import post_bp
+    from app.routes.comments import comment_bp
+    from app.routes.reports import report_bp
 
-    from .routes.db_test import db_test_bp
-    app.register_blueprint(db_test_bp, url_prefix="/api")
+    app.register_blueprint(user_bp)
+    app.register_blueprint(post_bp)
+    app.register_blueprint(comment_bp)
+    app.register_blueprint(report_bp)
 
     return app
