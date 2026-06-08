@@ -1,8 +1,12 @@
 from flask import Flask
 
+import os
+from flask import Flask, send_from_directory
+
 from app.config import Config
 from app.extensions import db, cors
 
+from app.routes.upload import upload_bp
 
 def create_app():
     app = Flask(__name__)
@@ -21,5 +25,10 @@ def create_app():
     app.register_blueprint(post_bp)
     app.register_blueprint(comment_bp)
     app.register_blueprint(report_bp)
+
+    @app.route("/uploads/<path:filename>")
+    def uploaded_file(filename):
+        upload_root = os.path.join(app.root_path, "..", "uploads")
+        return send_from_directory(upload_root, filename)
 
     return app
