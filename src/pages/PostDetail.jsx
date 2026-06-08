@@ -1,112 +1,202 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { posts, comments as initialComments } from '../mockData';
-import { useFavorites } from '../context/FavoriteContext';
+import { postAPI, reportAPI } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 function PostDetail() {
   const { id } = useParams();
-  const post = posts.find(p => p.id == id);
+  const { currentUser } = useAuth();
 
-  const [commentList, setCommentList] = useState(initialComments);
+  // ===== 帖子数据状态 =====
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // ===== 评论相关状态 =====
   const [newComment, setNewComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post ? post.likes : 0);
+  // ===== 回复相关状态 =====
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
 
-  const { toggleFavorite, isFavorited } = useFavorites();
-  const collected = isFavorited(post ? post.id : null);
-  const [collectCount, setCollectCount] = useState(post ? post.collects : 0);
-
+  // ===== 点赞/收藏状态（由后端返回，不再本地维护） =====
   const [returnPressed, setReturnPressed] = useState(false);
 
   // ===== 举报相关状态 =====
-  const [showReportModal, setShowReportModal] = useState(false);   // 是否显示举报弹窗
-  const [reportReason, setReportReason] = useState('');             // 举报原因类型
-  const [reportDetail, setReportDetail] = useState('');             // 详细描述
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetail, setReportDetail] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
 
-  // 预设的举报原因选项（对应后端 reason_type）
+  // 举报原因映射（前端显示用中文，发送给后端用英文）
   const reportReasons = [
-    '色情低俗',
-    '广告营销',
-    '人身攻击',
-    '虚假信息',
-    '违法违规',
-    '其他'
+    { label: '色情低俗', value: 'SPAM' },
+    { label: '广告营销', value: 'AD' },
+    { label: '人身攻击', value: 'ABUSE' },
+    { label: '虚假信息', value: 'FALSE_INFO' },
+    { label: '违法违规', value: 'ILLEGAL' },
+    { label: '其他', value: 'OTHER' },
   ];
 
-  if (!post) {
-    return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <h2>帖子未找到</h2>
-        <p>抱歉，ID为 {id} 的帖子不存在。</p>
-        <Link to="/" style={{ color: '#1890ff' }}>← 返回首页</Link>
-      </div>
-    );
-  }
-
-  const postComments = commentList.filter(c => c.postId == id);
-
-  const handleLike = () => {
-    if (liked) {
-      setLiked(false);
-      setLikeCount(likeCount - 1);
-    } else {
-      setLiked(true);
-      setLikeCount(likeCount + 1);
+  // ===== 获取帖子详情 =====
+  const fetchPostDetail = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await postAPI.getDetail(id);
+      setPost(result);
+    } catch (err) {
+      console.error('获取帖子详情失败:', err);
+      setError(err.message || '加载失败，请稍后重试');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCollect = () => {
-    toggleFavorite(post.id);
-    setCollectCount(collected ? collectCount - 1 : collectCount + 1);
+  useEffect(() => {
+    fetchPostDetail();
+  }, [id]);
+
+  // ===== 处理点赞 =====
+  const handleLike = async () => {
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
+    try {
+      const result = await postAPI.like(post.id);
+      setPost(prev => ({
+        ...prev,
+        isLiked: result.isLiked,
+        likesCount: result.likesCount,
+      }));
+    } catch (err) {
+      alert('操作失败：' + (err.message || '请稍后重试'));
+    }
   };
 
-  const handleSubmitComment = (e) => {
+  // ===== 处理收藏 =====
+  const handleCollect = async () => {
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
+    try {
+      const result = await postAPI.collect(post.id);
+      setPost(prev => ({
+        ...prev,
+        isCollected: result.isCollected,
+        collectsCount: result.collectsCount,
+      }));
+    } catch (err) {
+      alert('操作失败：' + (err.message || '请稍后重试'));
+    }
+  };
+
+  // ===== 提交评论 =====
+  const handleSubmitComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const newCommentObj = {
-      id: commentList.length + 1,
-      postId: Number(id),
-      author: '当前用户',
-      content: newComment,
-      time: '刚刚'
-    };
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
 
-    setCommentList([newCommentObj, ...commentList]);
-    setNewComment('');
+    setSubmittingComment(true);
+    try {
+      await postAPI.addComment(post.id, { content: newComment });
+      setNewComment('');
+      // 重新获取详情以刷新评论列表
+      await fetchPostDetail();
+    } catch (err) {
+      alert('评论失败：' + (err.message || '请稍后重试'));
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
-  // ===== 举报相关处理函数 =====
+  // ===== 提交回复 =====
+  const handleSubmitReply = async (commentId) => {
+    if (!replyContent.trim()) return;
+
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
+
+    try {
+      await postAPI.addComment(post.id, { content: replyContent, parentId: commentId });
+      setReplyContent('');
+      setReplyingTo(null);
+      // 重新获取详情以刷新评论列表
+      await fetchPostDetail();
+    } catch (err) {
+      alert('回复失败：' + (err.message || '请稍后重试'));
+    }
+  };
+
+  // ===== 打开举报弹窗 =====
   const openReportModal = () => {
-    setReportReason('');      // 打开弹窗时清空之前的选择
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
+    setReportReason('');
     setReportDetail('');
     setShowReportModal(true);
   };
 
-  const handleSubmitReport = () => {
+  // ===== 提交举报 =====
+  const handleSubmitReport = async () => {
     if (!reportReason) {
       alert('请选择举报原因');
       return;
     }
 
-    // 构造举报数据（对应后端 reports 表）
-    const reportData = {
-      target_type: 'post',          // 举报对象类型：帖子
-      target_id: post.id,           // 被举报帖子的ID
-      reason_type: reportReason,    // 举报原因类型
-      reason_detail: reportDetail   // 详细描述
-    };
-
-    console.log('提交举报：', reportData);
-    // 以后这里换成 fetch 请求发给后端
-    // fetch('/api/reports', { method: 'POST', body: JSON.stringify(reportData) })
-
-    alert('举报已提交，我们会尽快处理');
-    setShowReportModal(false);
+    setSubmittingReport(true);
+    try {
+      await reportAPI.submit({
+        targetType: 'POST',
+        targetId: post.id,
+        reasonType: reportReason,
+        reasonDetail: reportDetail || undefined,
+      });
+      alert('举报已提交，我们会尽快处理');
+      setShowReportModal(false);
+    } catch (err) {
+      alert('举报失败：' + (err.message || '请稍后重试'));
+    } finally {
+      setSubmittingReport(false);
+    }
   };
 
-  const images = post.images && post.images.length > 0 ? post.images : (post.image ? [post.image] : []);
+  // ===== 加载状态 =====
+  if (loading) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+        加载中...
+      </div>
+    );
+  }
+
+  // ===== 错误或帖子不存在 =====
+  if (error || !post) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <h2>帖子未找到</h2>
+        <p>{error || `抱歉，ID为 ${id} 的帖子不存在。`}</p>
+        <Link to="/" style={{ color: '#1890ff' }}>← 返回首页</Link>
+      </div>
+    );
+  }
+
+  // ===== 图片数组（兼容后端返回的 images 字段） =====
+  const images = post.images || [];
+
+  // ===== 评论列表 =====
+  const postComments = post.comments || [];
 
   return (
     <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto', minHeight: '150vh' }}>
@@ -151,7 +241,7 @@ function PostDetail() {
           fontSize: '12px',
           fontWeight: '500'
         }}>
-          {post.tag}
+          {post.category}
         </span>
       </div>
 
@@ -166,16 +256,27 @@ function PostDetail() {
       }}>
         {/* 作者信息 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
-          <div style={{
-            width: '32px', height: '32px', borderRadius: '50%',
-            backgroundColor: '#e6f7ff', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            fontSize: '16px', color: '#1890ff'
-          }}>
-            👤
-          </div>
+          {post.author?.avatar ? (
+            <img
+              src={post.author.avatar}
+              alt={post.author.nickname}
+              style={{
+                width: '32px', height: '32px', borderRadius: '50%',
+                objectFit: 'cover'
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '50%',
+              backgroundColor: '#e6f7ff', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px', color: '#1890ff'
+            }}>
+              👤
+            </div>
+          )}
           <span style={{ fontSize: '15px', fontWeight: '500', color: '#333' }}>
-            {typeof post.author === 'object' ? post.author.nickname : post.author}
+            {post.author?.nickname || '匿名用户'}
           </span>
         </div>
 
@@ -206,10 +307,10 @@ function PostDetail() {
 
         {/* 发帖时间 */}
         <div style={{ textAlign: 'right', color: '#999', fontSize: '12px', marginBottom: '15px' }}>
-          {post.time}
+          {post.createdAt}
         </div>
 
-        {/* 互动栏（点赞 + 评论数 + 收藏 + 举报） */}
+        {/* 互动栏 */}
         <div style={{
           display: 'flex', justifyContent: 'center', gap: '24px',
           padding: '15px 0 0 0', borderTop: '1px solid #eee', flexWrap: 'wrap'
@@ -217,29 +318,28 @@ function PostDetail() {
           <button onClick={handleLike} style={{
             display: 'flex', alignItems: 'center', gap: '4px',
             background: 'none', border: 'none', cursor: 'pointer',
-            color: liked ? '#ff4d4f' : '#999', fontSize: '14px',
+            color: post.isLiked ? '#ff4d4f' : '#999', fontSize: '14px',
             padding: '4px 8px', borderRadius: '8px'
           }}>
-            <span style={{ fontSize: '16px' }}>{liked ? '❤️' : '🤍'}</span>
-            <span>{likeCount}</span>
+            <span style={{ fontSize: '16px' }}>{post.isLiked ? '❤️' : '🤍'}</span>
+            <span>{post.likesCount ?? 0}</span>
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#999', fontSize: '14px' }}>
             <span style={{ fontSize: '16px' }}>💬</span>
-            <span>{postComments.length}</span>
+            <span>{post.commentsCount ?? postComments.length}</span>
           </div>
 
           <button onClick={handleCollect} style={{
             display: 'flex', alignItems: 'center', gap: '4px',
             background: 'none', border: 'none', cursor: 'pointer',
-            color: collected ? '#faad14' : '#999', fontSize: '14px',
+            color: post.isCollected ? '#faad14' : '#999', fontSize: '14px',
             padding: '4px 8px', borderRadius: '8px'
           }}>
-            <span style={{ fontSize: '16px' }}>{collected ? '⭐' : '☆'}</span>
-            <span>{collectCount}</span>
+            <span style={{ fontSize: '16px' }}>{post.isCollected ? '⭐' : '☆'}</span>
+            <span>{post.collectsCount ?? 0}</span>
           </button>
 
-          {/* ===== 举报按钮（新增） ===== */}
           <button onClick={openReportModal} style={{
             display: 'flex', alignItems: 'center', gap: '4px',
             background: 'none', border: 'none', cursor: 'pointer',
@@ -263,18 +363,97 @@ function PostDetail() {
 
         {postComments.length > 0 ? (
           postComments.map(comment => (
-            <div key={comment.id} style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div key={comment.id} style={{
+              padding: '12px 0',
+              borderBottom: '1px solid #f0f0f0',
+              position: 'relative'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>{comment.author}</span>
-                <span style={{ color: '#999', fontSize: '12px' }}>{comment.time}</span>
+                <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                  {comment.author?.nickname || '匿名用户'}
+                </span>
+                <span style={{ color: '#999', fontSize: '12px' }}>{comment.createdAt}</span>
               </div>
-              <p style={{ margin: 0, fontSize: '14px', color: '#555' }}>{comment.content}</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555' }}>{comment.content}</p>
+
+              {/* 右下角胶囊回复按钮 或 回复输入框 */}
+              {replyingTo !== comment.id ? (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                  <button
+                    onClick={() => {
+                      setReplyingTo(comment.id);
+                      setReplyContent('');
+                    }}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      border: '1px solid #d9d9d9',
+                      backgroundColor: '#fff',
+                      color: '#666',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    💬 回复
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: '8px' }}>
+                  <textarea
+                    placeholder={`回复 @${comment.author?.nickname || '匿名用户'}：`}
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    rows="2"
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '13px',
+                      resize: 'vertical',
+                      boxSizing: 'border-box',
+                      marginBottom: '6px'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '4px',
+                        border: '1px solid #ddd',
+                        backgroundColor: '#f5f5f5',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => handleSubmitReply(comment.id)}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        backgroundColor: '#1890ff',
+                        color: 'white',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      回复
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         ) : (
           <p style={{ color: '#999', textAlign: 'center' }}>暂无评论，快来发表第一条评论吧！</p>
         )}
 
+        {/* 发表新评论 */}
         <form onSubmit={handleSubmitComment} style={{ marginTop: '20px' }}>
           <textarea
             placeholder="写下你的评论..."
@@ -286,13 +465,14 @@ function PostDetail() {
               border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box'
             }}
           />
-          <button type="submit" style={{
+          <button type="submit" disabled={submittingComment} style={{
             marginTop: '10px', padding: '8px 20px',
-            backgroundColor: '#1890ff', color: 'white',
-            border: 'none', borderRadius: '20px', cursor: 'pointer', fontSize: '14px',
+            backgroundColor: submittingComment ? '#a0cfff' : '#1890ff',
+            color: 'white',
+            border: 'none', borderRadius: '20px', cursor: submittingComment ? 'not-allowed' : 'pointer', fontSize: '14px',
             float: 'right'
           }}>
-            发表评论
+            {submittingComment ? '提交中...' : '发表评论'}
           </button>
           <div style={{ clear: 'both' }}></div>
         </form>
@@ -305,42 +485,40 @@ function PostDetail() {
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}
-        onClick={() => setShowReportModal(false)}  // 点击背景关闭
+        onClick={() => setShowReportModal(false)}
         >
           <div style={{
             backgroundColor: '#fff', borderRadius: '12px', padding: '24px',
             width: '400px', maxWidth: '90%', boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
           }}
-          onClick={(e) => e.stopPropagation()}  // 防止点击弹窗内部关闭
+          onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: '#333' }}>
               🚩 举报帖子
             </h3>
 
-            {/* 举报原因选择 */}
             <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>请选择举报原因：</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
               {reportReasons.map(reason => (
                 <button
-                  key={reason}
-                  onClick={() => setReportReason(reason)}
+                  key={reason.value}
+                  onClick={() => setReportReason(reason.value)}
                   style={{
                     padding: '6px 14px',
                     borderRadius: '20px',
-                    border: reportReason === reason ? '2px solid #1890ff' : '1px solid #ddd',
-                    backgroundColor: reportReason === reason ? '#e6f7ff' : '#fff',
-                    color: reportReason === reason ? '#1890ff' : '#666',
+                    border: reportReason === reason.value ? '2px solid #1890ff' : '1px solid #ddd',
+                    backgroundColor: reportReason === reason.value ? '#e6f7ff' : '#fff',
+                    color: reportReason === reason.value ? '#1890ff' : '#666',
                     cursor: 'pointer',
                     fontSize: '13px',
                     transition: 'all 0.2s'
                   }}
                 >
-                  {reason}
+                  {reason.label}
                 </button>
               ))}
             </div>
 
-            {/* 详细描述 */}
             <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>详细描述（可选）：</p>
             <textarea
               placeholder="请补充更多细节..."
@@ -354,7 +532,6 @@ function PostDetail() {
               }}
             />
 
-            {/* 按钮区 */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setShowReportModal(false)}
@@ -368,13 +545,15 @@ function PostDetail() {
               </button>
               <button
                 onClick={handleSubmitReport}
+                disabled={submittingReport}
                 style={{
                   padding: '8px 18px', borderRadius: '20px',
-                  border: 'none', backgroundColor: '#ff4d4f',
-                  color: 'white', cursor: 'pointer', fontSize: '14px'
+                  border: 'none',
+                  backgroundColor: submittingReport ? '#ff9999' : '#ff4d4f',
+                  color: 'white', cursor: submittingReport ? 'not-allowed' : 'pointer', fontSize: '14px'
                 }}
               >
-                提交举报
+                {submittingReport ? '提交中...' : '提交举报'}
               </button>
             </div>
           </div>

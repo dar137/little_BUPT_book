@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt } from 'react-icons/fa';
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
 import './App.css';
 import Home from './pages/Home';
 import PostDetail from './pages/PostDetail';
@@ -11,35 +11,30 @@ import Search from './pages/Search';
 import Profile from './pages/Profile';
 import Report from './pages/Report';
 import AuthPrompt from './pages/AuthPrompt';
+import UserProfile from './pages/UserProfile';  // ← 新增导入
+
+// 简单的管理后台占位组件（你可以后续完善）
+const AdminDashboard = () => {
+  const { currentUser } = useAuth();
+  if (!currentUser || currentUser.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  return (
+    <div style={{ padding: '20px', textAlign: 'center' }}>
+      <h2>🛡️ 管理员后台</h2>
+      <p>欢迎，{currentUser.nickname || currentUser.username}</p>
+      <p>这里可以管理帖子、用户和举报</p>
+    </div>
+  );
+};
 
 // 导航栏组件
 const Navbar = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const checkLogin = () => {
-      const token = localStorage.getItem("token");
-      const userInfo = localStorage.getItem("userInfo");
-      if (token && userInfo) {
-        setIsLoggedIn(true);
-        const user = JSON.parse(userInfo);
-        setUserName(user.name || user.studentId);
-      } else {
-        setIsLoggedIn(false);
-        setUserName('');
-      }
-    };
-    
-    checkLogin();
-    window.addEventListener('authChange', checkLogin);
-    return () => window.removeEventListener('authChange', checkLogin);
-  }, []);
-
   const handleMyClick = () => {
-    const token = localStorage.getItem("token");
-    if (token) {
+    if (currentUser) {
       navigate('/profile');
     } else {
       navigate('/auth-prompt');
@@ -47,9 +42,7 @@ const Navbar = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userInfo");
-    window.dispatchEvent(new Event('authChange'));
+    logout();
     navigate('/');
   };
 
@@ -60,7 +53,7 @@ const Navbar = () => {
           <span className="logo-icon">📚</span>
           <span className="logo-text">小邮书</span>
         </Link>
-        
+
         <div className="nav-links">
           <Link to="/" className="nav-item">
             <FaHome className="nav-icon" />
@@ -74,17 +67,25 @@ const Navbar = () => {
             <FaSearch className="nav-icon" />
             <span>搜索</span>
           </Link>
-          
-          {isLoggedIn ? (
-            <div className="user-menu">
-              <button className="nav-item user-btn" onClick={() => navigate('/profile')}>
-                <FaUser className="nav-icon" />
-                <span>{userName}</span>
-              </button>
-              <button className="logout-btn-nav" onClick={handleLogout} title="退出登录">
-                <FaSignOutAlt />
-              </button>
-            </div>
+
+          {currentUser ? (
+            <>
+              {currentUser.role === 'admin' && (
+                <Link to="/admin" className="nav-item admin-nav-item">
+                  <FaShieldAlt className="nav-icon" />
+                  <span>管理</span>
+                </Link>
+              )}
+              <div className="user-menu">
+                <button className="nav-item user-btn" onClick={() => navigate('/profile')}>
+                  <FaUser className="nav-icon" />
+                  <span>{currentUser.nickname || currentUser.username}</span>
+                </button>
+                <button className="logout-btn-nav" onClick={handleLogout} title="退出登录">
+                  <FaSignOutAlt />
+                </button>
+              </div>
+            </>
           ) : (
             <button className="nav-item my-btn" onClick={handleMyClick}>
               <FaUser className="nav-icon" />
@@ -112,6 +113,8 @@ function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/report" element={<Report />} />
           <Route path="/auth-prompt" element={<AuthPrompt />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/user/:userId" element={<UserProfile />} />   {/* ← 新增路由 */}
         </Routes>
       </main>
     </BrowserRouter>

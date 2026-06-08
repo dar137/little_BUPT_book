@@ -1,27 +1,47 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';  // 新增：用于跳转
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import CategoryTabs from '../components/CategoryTabs';
-import { posts } from '../mockData';
+import { postAPI } from '../api';
 
 function Home() {
-  const navigate = useNavigate();  // 新增：获取路由跳转函数
+  const navigate = useNavigate();
   const [activeTag, setActiveTag] = useState('全部');
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const filteredPosts = activeTag === '全部'
-    ? posts
-    : posts.filter(post => post.tag === activeTag);
+  // 获取帖子列表
+  const fetchPosts = async (category) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {};
+      if (category && category !== '全部') {
+        params.category = category;
+      }
+      const result = await postAPI.getList(params);
+      setPosts(result.list || []);
+    } catch (err) {
+      console.error('获取帖子失败:', err);
+      setError(err.message || '加载失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // 新增：处理举报点击
+  useEffect(() => {
+    fetchPosts(activeTag);
+  }, [activeTag]);
+
+  // 处理举报点击（保留原有逻辑，但需适配新的 post 结构）
   const handleReport = (post) => {
-    // 将举报信息存储到 localStorage，方便举报页面读取
     localStorage.setItem('reportTarget', JSON.stringify({
       targetType: 'post',
       targetId: post.id,
       targetTitle: post.title,
-      targetAuthor: post.author
+      targetAuthor: post.author?.nickname || '未知'
     }));
-    // 跳转到举报页面
     navigate('/report');
   };
 
@@ -32,12 +52,20 @@ function Home() {
         onTagChange={setActiveTag}
       />
 
-      {filteredPosts.length > 0 ? (
-        filteredPosts.map(post => (
+      {loading ? (
+        <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>
+          加载中...
+        </p>
+      ) : error ? (
+        <p style={{ textAlign: 'center', color: '#ff4d4f', marginTop: '40px' }}>
+          {error}
+        </p>
+      ) : posts.length > 0 ? (
+        posts.map(post => (
           <PostCard 
             key={post.id} 
             post={post} 
-            onReport={handleReport}   // 新增：传递举报回调
+            onReport={handleReport}
           />
         ))
       ) : (
