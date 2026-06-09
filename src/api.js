@@ -134,7 +134,7 @@ export const postAPI = {
   create: (body) => request('/posts', { method: 'POST', body: JSON.stringify(body), timeoutMs: 45000 }),
   search: (params) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/posts/search?${query}`);
+    return request(`/posts/fuzzy-search?${query}`);
   },
   like: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
   collect: (id) => request(`/posts/${id}/collect`, { method: 'POST' }),

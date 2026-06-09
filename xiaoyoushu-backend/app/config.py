@@ -4,7 +4,8 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 
-load_dotenv(".env")
+BACKEND_ROOT = os.path.dirname(os.path.dirname(__file__))
+load_dotenv(os.path.join(BACKEND_ROOT, ".env"))
 
 
 class Config:
@@ -34,3 +35,10 @@ class Config:
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "app/uploads")
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 10 * 1024 * 1024))
     QWEN_API_KEY = os.getenv("QWEN_API_KEY")
+    QWEN_API_URL = os.getenv("QWEN_API_URL")
+    QWEN_MODEL = os.getenv("QWEN_MODEL") or os.getenv("QWEN_AUDIT_MODEL")
+    QWEN_APP_ID = os.getenv("QWEN_APP_ID")
+    FUZZY_SEARCH_API_URL = os.getenv("FUZZY_SEARCH_API_URL")
+    FUZZY_SEARCH_API_KEY = os.getenv("FUZZY_SEARCH_API_KEY")
+    FUZZY_SEARCH_MODEL = os.getenv("FUZZY_SEARCH_MODEL")
+    FUZZY_SEARCH_APP_ID = os.getenv("FUZZY_SEARCH_APP_ID")

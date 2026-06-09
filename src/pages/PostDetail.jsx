@@ -476,12 +476,6 @@ function PostDetail() {
           {post.createdAt}
         </div>
 
-        {post.aiReview?.reason && (
-          <div style={{ color: '#718096', fontSize: '13px', marginBottom: '12px', textAlign: 'right' }}>
-            AI 审核：{post.aiReview.reason}
-          </div>
-        )}
-
         {/* 互动栏 */}
         {showInteractions && (
         <div style={{

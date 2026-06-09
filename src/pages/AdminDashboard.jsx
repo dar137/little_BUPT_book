@@ -35,8 +35,9 @@ const AdminDashboard = () => {
 
   const aiReviewBadge = (review) => {
     const result = review?.result;
+    if (result === "PASS") return null;
+
     const config = {
-      PASS: { label: "AI 合规", background: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
       NEED_HUMAN: { label: "AI 可疑", background: "#fffbe6", color: "#d48806", border: "#ffe58f" },
       REJECT: { label: "AI 不合规", background: "#fff1f0", color: "#cf1322", border: "#ffa39e" },
     }[result] || { label: "AI 未审核", background: "#f5f5f5", color: "#666", border: "#d9d9d9" };

@@ -12,6 +12,7 @@ from app.models.comment import Comment
 from app.models.behavior_event import BehaviorEvent
 from app.services.audit_service import AI_RESULT_PASS, AI_RESULT_REJECT, review_post_content
 from app.services.moderation_service import hide_post
+from app.services.search_service import expand_search_terms
 from app.utils.response import success, fail
 from app.utils.jwt import login_required, optional_login
 
@@ -429,6 +430,84 @@ def search_posts(current_user=None):
             for post in pagination.items
         ],
         "total": pagination.total
+    })
+
+
+@post_bp.route("/fuzzy-search", methods=["GET"])
+@optional_login
+def fuzzy_search_posts(current_user=None):
+    keyword = (request.args.get("keyword") or "").strip()
+    category = request.args.get("category")
+    page = int(request.args.get("page", 1))
+    page_size = int(request.args.get("pageSize", 10))
+
+    if not keyword:
+        return fail("搜索关键词不能为空", code=400, status_code=400)
+
+    expanded_terms = expand_search_terms(keyword)
+    fuzzy_terms = [term for term in expanded_terms if term != keyword]
+    title_match = Post.title.like(f"%{keyword}%")
+    content_match = Post.content.like(f"%{keyword}%")
+    category_match = Category.name.like(f"%{keyword}%")
+    author_match = Post.user.has(nickname=keyword) | Post.user.has(
+        Post.user.property.mapper.class_.nickname.like(f"%{keyword}%")
+    )
+
+    fuzzy_conditions = []
+    fuzzy_category_conditions = []
+    for term in fuzzy_terms:
+        fuzzy_conditions.extend([
+            Post.title.like(f"%{term}%"),
+            Post.content.like(f"%{term}%"),
+            Post.user.has(Post.user.property.mapper.class_.nickname.like(f"%{term}%")),
+        ])
+        fuzzy_category_conditions.append(
+            Category.name.like(f"%{term}%"),
+        )
+
+    fuzzy_match = db.or_(*fuzzy_conditions) if fuzzy_conditions else db.false()
+    category_only_match = db.or_(category_match, *fuzzy_category_conditions)
+
+    match_conditions = [
+        title_match,
+        content_match,
+        fuzzy_match,
+        category_only_match,
+        author_match,
+    ]
+
+    query = Post.query.outerjoin(Category).filter(
+        Post.status == "PUBLISHED",
+        db.or_(*match_conditions)
+    )
+
+    if category:
+        query = query.filter(Category.name == category)
+
+    rank = db.case(
+        (title_match, 1),
+        (content_match, 2),
+        (fuzzy_match, 3),
+        (category_only_match, 4),
+        else_=5
+    )
+
+    pagination = query.order_by(
+        rank.asc(),
+        Post.created_at.desc()
+    ).paginate(
+        page=page,
+        per_page=page_size,
+        error_out=False
+    )
+
+    return success({
+        "list": [
+            format_post(post, current_user)
+            for post in pagination.items
+        ],
+        "total": pagination.total,
+        "expandedTerms": expanded_terms
     })
 
 

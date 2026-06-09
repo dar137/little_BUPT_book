@@ -229,11 +229,9 @@ const Profile = () => {
   const postTitle = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.title;
   const postSummary = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.summary;
   const aiReviewLabel = (post) => ({
-    PASS: { text: "AI 合规", color: "#389e0d", background: "#f6ffed", border: "#b7eb8f" },
     NEED_HUMAN: { text: isPostPending(post) ? "审核中" : "AI 可疑", color: "#d48806", background: "#fffbe6", border: "#ffe58f" },
     REJECT: { text: "AI审核不合规", color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
   }[post?.aiReview?.result]);
-
   const handleDeleteMyPost = async (postId) => {
     if (!window.confirm("是否删除该帖子")) return;
 
