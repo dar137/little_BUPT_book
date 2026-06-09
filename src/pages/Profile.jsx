@@ -228,10 +228,14 @@ const Profile = () => {
   const isPostPending = (post) => post?.status === "PENDING_REVIEW";
   const postTitle = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.title;
   const postSummary = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.summary;
-  const aiReviewLabel = (post) => ({
-    NEED_HUMAN: { text: isPostPending(post) ? "审核中" : "AI 可疑", color: "#d48806", background: "#fffbe6", border: "#ffe58f" },
-    REJECT: { text: "AI审核不合规", color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
-  }[post?.aiReview?.result]);
+  const aiReviewLabel = (post) => {
+    if (post?.aiReview?.result === "NEED_HUMAN") {
+      return isPostPending(post)
+        ? { text: "审核中", color: "#d48806", background: "#fffbe6", border: "#ffe58f" }
+        : null;
+    }
+    return null;
+  };
   const handleDeleteMyPost = async (postId) => {
     if (!window.confirm("是否删除该帖子")) return;
 
@@ -308,14 +312,30 @@ const Profile = () => {
     return "";
   };
 
-  const renderListPost = (post, extra = null, actions = null) => (
+  const postNotice = (post) => (
+    <>
+      {isPostTakenDown(post) && (
+        <span style={{ display: 'inline-block', marginTop: '8px', padding: '5px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '14px', color: '#ad6800', fontSize: '12px' }}>
+          该帖子已被封禁
+        </span>
+      )}
+      {isPostRejected(post) && (
+        <div style={{ display: 'inline-block', marginTop: '8px', padding: '5px 10px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '14px', color: '#cf1322', fontSize: '12px', lineHeight: '1.6' }}>
+          <div>AI审核不合规</div>
+          <div>已打回：{post.aiReview?.reason || '内容未通过审核'}</div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderListPost = (post, extra = null, actions = null, notice = null) => (
     <div key={`${post.id}-${extra || ""}`} style={{ background: 'white', borderRadius: '12px', padding: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
       {post.coverImage ? (
         <img src={post.coverImage} alt={post.title} style={{ width: '88px', height: '88px', borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }} />
       ) : (
         <div style={{ width: '88px', height: '88px', borderRadius: '8px', background: '#f7fafc', color: '#cbd5e0', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>图片</div>
       )}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: '88px', display: 'flex', flexDirection: 'column' }}>
         <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
           <h4 style={{ margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{postTitle(post)}</h4>
           {postSummary(post) && <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '13px' }}>{postSummary(post)}</p>}
@@ -331,7 +351,8 @@ const Profile = () => {
             {aiReviewLabel(post).text}
           </span>
         )}
-        {actions && <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>{actions}</div>}
+        {notice}
+        {actions && <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>{actions}</div>}
       </div>
     </div>
   );
@@ -386,6 +407,11 @@ const Profile = () => {
             )}
           </div>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+          <button onClick={handleLogout} style={{ padding: '6px 14px', background: '#fef0f0', border: 'none', borderRadius: '18px', color: '#ff6b6b', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px' }}>
+            <FaSignOutAlt size={11} /> 退出登录
+          </button>
+        </div>
       </div>
 
       {/* 统计卡片 */}
@@ -429,16 +455,7 @@ const Profile = () => {
               myPosts.map(post => (
                 renderListPost(post, post.category, (
                   <>
-                  {isPostTakenDown(post) && (
-                    <span style={{ padding: '5px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '14px', color: '#ad6800', fontSize: '12px' }}>
-                      该帖子已被封禁
-                    </span>
-                  )}
                   {isPostRejected(post) && (
-                    <>
-                    <span style={{ padding: '5px 10px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '14px', color: '#cf1322', fontSize: '12px' }}>
-                      已打回：{post.aiReview?.reason || '内容未通过审核'}
-                    </span>
                     <button
                       type="button"
                       onClick={() => handleEditRejectedPost(post)}
@@ -455,7 +472,6 @@ const Profile = () => {
                     >
                       重新编辑
                     </button>
-                    </>
                   )}
                   <button
                     type="button"
@@ -477,7 +493,7 @@ const Profile = () => {
                     <FaTrash size={13} />
                   </button>
                   </>
-                ))
+                ), postNotice(post))
               ))
             }
           </div>
@@ -590,10 +606,6 @@ const Profile = () => {
           </div>
         )}
       </div>
-
-      <button onClick={handleLogout} style={{ width: '100%', marginTop: '32px', padding: '12px', background: '#fef0f0', border: 'none', borderRadius: '40px', color: '#ff6b6b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-        <FaSignOutAlt /> 退出登录
-      </button>
     </div>
   );
 };

@@ -3,7 +3,6 @@ import json
 import mimetypes
 import os
 import re
-from urllib.parse import urlparse
 
 import requests
 from flask import current_app
@@ -27,13 +26,6 @@ def _chat_completion_url(endpoint):
     if endpoint.rstrip("/").endswith("/chat/completions"):
         return endpoint
     return f"{endpoint.rstrip('/')}/chat/completions"
-
-
-def _app_completion_url(endpoint, app_id):
-    parsed = urlparse(str(endpoint or "").strip())
-    if not parsed.scheme or not parsed.netloc:
-        return ""
-    return f"{parsed.scheme}://{parsed.netloc}/api/v1/apps/{app_id}/completion"
 
 
 def _extract_json(text):
@@ -117,13 +109,6 @@ def _build_prompt(title, content):
     )
 
 
-def _build_image_list(image_urls):
-    return [
-        _image_to_data_url(image_url)
-        for image_url in image_urls[:4]
-    ]
-
-
 def _build_messages(title, content, image_urls):
     content_parts = [{"type": "text", "text": _build_prompt(title, content)}]
     for image_url in image_urls[:4]:
@@ -147,18 +132,14 @@ def _extract_answer(raw_response):
     return ""
 
 
-def _safe_error(exc, app_id=None):
-    message = str(exc)
-    if app_id:
-        message = message.replace(app_id, "[APP_ID]")
-    return message[:180]
+def _safe_error(exc):
+    return str(exc)[:180]
 
 
 def review_post_content(title, content, image_urls):
     api_key = current_app.config.get("QWEN_API_KEY")
     endpoint = current_app.config.get("QWEN_API_URL")
     model = current_app.config.get("QWEN_MODEL")
-    app_id = current_app.config.get("QWEN_APP_ID")
 
     if not api_key:
         return {
@@ -170,7 +151,7 @@ def review_post_content(title, content, image_urls):
             "ai_model": None,
         }
 
-    if not endpoint or (not app_id and not model):
+    if not endpoint or not model:
         return {
             "ai_result": AI_RESULT_NEED_HUMAN,
             "risk_level": "MEDIUM",
@@ -185,53 +166,31 @@ def review_post_content(title, content, image_urls):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        used_app = False
-        if app_id:
-            try:
-                response = requests.post(
-                    _app_completion_url(endpoint, app_id),
-                    headers=headers,
-                    json={
-                        "input": {
-                            "prompt": _build_prompt(title, content),
-                            "image_list": _build_image_list(image_urls),
-                        }
-                    },
-                    timeout=30,
-                )
-                response.raise_for_status()
-                used_app = True
-            except Exception:
-                if not model:
-                    raise
-                response = None
-
-        if not app_id or response is None:
-            response = requests.post(
-                _chat_completion_url(endpoint),
-                headers=headers,
-                json={
-                    "model": model,
-                    "messages": _build_messages(title, content, image_urls),
-                    "temperature": 0,
-                },
-                timeout=30,
-            )
+        response = requests.post(
+            _chat_completion_url(endpoint),
+            headers=headers,
+            json={
+                "model": model,
+                "messages": _build_messages(title, content, image_urls),
+                "temperature": 0,
+            },
+            timeout=30,
+        )
         response.raise_for_status()
         raw_response = response.json()
         answer = _extract_answer(raw_response)
         parsed = _extract_json(answer) or {"result": "NEED_HUMAN", "reason": answer}
         result = _normalize_result(parsed)
         result["raw_response"] = raw_response
-        result["ai_model"] = "QWEN_APP" if used_app else model
+        result["ai_model"] = model
         return result
     except Exception as exc:
         return {
             "ai_result": AI_RESULT_NEED_HUMAN,
             "risk_level": "MEDIUM",
             "confidence": 0,
-            "reason": f"AI 审核调用失败，转人工审核：{_safe_error(exc, app_id)}",
-            "raw_response": {"error": _safe_error(exc, app_id)},
+            "reason": f"AI 审核调用失败，转人工审核：{_safe_error(exc)}",
+            "raw_response": {"error": _safe_error(exc)},
             "ai_model": model,
         }
 

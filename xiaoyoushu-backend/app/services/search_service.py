@@ -1,6 +1,5 @@
 import json
 import re
-from urllib.parse import urlparse
 
 import requests
 from flask import current_app
@@ -16,13 +15,6 @@ def _chat_completion_url(endpoint):
     if endpoint.rstrip("/").endswith("/chat/completions"):
         return endpoint
     return f"{endpoint.rstrip('/')}/chat/completions"
-
-
-def _app_completion_url(endpoint, app_id):
-    parsed = urlparse(str(endpoint or "").strip())
-    if not parsed.scheme or not parsed.netloc:
-        return ""
-    return f"{parsed.scheme}://{parsed.netloc}/api/v1/apps/{app_id}/completion"
 
 
 def _extract_json(text):
@@ -114,8 +106,7 @@ def expand_search_terms(keyword):
     api_key = current_app.config.get("FUZZY_SEARCH_API_KEY")
     endpoint = current_app.config.get("FUZZY_SEARCH_API_URL")
     model = current_app.config.get("FUZZY_SEARCH_MODEL")
-    app_id = current_app.config.get("FUZZY_SEARCH_APP_ID")
-    if not api_key or not endpoint or (not app_id and not model):
+    if not api_key or not endpoint or not model:
         return [keyword]
 
     prompt = (
@@ -130,33 +121,18 @@ def expand_search_terms(keyword):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        if app_id:
-            try:
-                response = requests.post(
-                    _app_completion_url(endpoint, app_id),
-                    headers=headers,
-                    json={"input": {"prompt": prompt}},
-                    timeout=8,
-                )
-                response.raise_for_status()
-            except Exception:
-                if not model:
-                    raise
-                response = None
-
-        if not app_id or response is None:
-            response = requests.post(
-                _chat_completion_url(endpoint),
-                headers=headers,
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.2,
-                },
-                timeout=8,
-            )
+        response = requests.post(
+            _chat_completion_url(endpoint),
+            headers=headers,
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2,
+            },
+            timeout=8,
+        )
         response.raise_for_status()
         raw_response = response.json()
         parsed = _parse_chat_completion(raw_response) or raw_response

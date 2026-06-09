@@ -37,8 +37,6 @@ class Config:
     QWEN_API_KEY = os.getenv("QWEN_API_KEY")
     QWEN_API_URL = os.getenv("QWEN_API_URL")
     QWEN_MODEL = os.getenv("QWEN_MODEL") or os.getenv("QWEN_AUDIT_MODEL")
-    QWEN_APP_ID = os.getenv("QWEN_APP_ID")
     FUZZY_SEARCH_API_URL = os.getenv("FUZZY_SEARCH_API_URL")
     FUZZY_SEARCH_API_KEY = os.getenv("FUZZY_SEARCH_API_KEY")
     FUZZY_SEARCH_MODEL = os.getenv("FUZZY_SEARCH_MODEL")
-    FUZZY_SEARCH_APP_ID = os.getenv("FUZZY_SEARCH_APP_ID")
