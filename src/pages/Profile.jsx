@@ -222,8 +222,14 @@ const Profile = () => {
     { key: "comments", label: "我的评论", icon: <FaComment /> },
   ];
   const isPostTakenDown = (post) => post?.status === "TAKEN_DOWN";
+  const isPostRejected = (post) => post?.status === "REJECTED";
   const postTitle = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.title;
   const postSummary = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.summary;
+  const aiReviewLabel = (post) => ({
+    PASS: { text: "AI 合规", color: "#389e0d", background: "#f6ffed", border: "#b7eb8f" },
+    NEED_HUMAN: { text: "AI 可疑", color: "#d48806", background: "#fffbe6", border: "#ffe58f" },
+    REJECT: { text: "AI 不合规", color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
+  }[post?.aiReview?.result]);
 
   const handleDeleteMyPost = async (postId) => {
     if (!window.confirm("是否删除该帖子")) return;
@@ -246,6 +252,16 @@ const Profile = () => {
     } catch (err) {
       alert("删除失败：" + (err.message || "请稍后重试"));
     }
+  };
+
+  const handleEditRejectedPost = (post) => {
+    sessionStorage.setItem('retryPostDraft', JSON.stringify({
+      title: post.title || '',
+      content: post.content || post.summary || '',
+      category: post.category || '',
+      estimatedPrice: post.estimatedPrice || '',
+    }));
+    navigate('/create?retry=1');
   };
 
   const renderListPost = (post, extra = null) => (
@@ -358,19 +374,50 @@ const Profile = () => {
                   <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'transform 0.2s' }}>
                       {post.coverImage && <img src={post.coverImage} alt={post.title} style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover' }} />}
-                      <div style={{ padding: '12px', paddingBottom: isPostTakenDown(post) ? '48px' : '36px' }}>
+                      <div style={{ padding: '12px', paddingBottom: (isPostTakenDown(post) || isPostRejected(post)) ? '78px' : '36px' }}>
                         <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</h4>
                         {post.summary && <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '13px' }}>{post.summary}</p>}
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#999' }}><span>{post.category}</span><span>{post.createdAt}</span></div>
                         <div style={{ display: 'flex', gap: '12px', marginTop: '10px', fontSize: '12px', color: '#666' }}><span>❤️ {post.likesCount || 0}</span><span>💬 {post.commentsCount || 0}</span></div>
+                        {aiReviewLabel(post) && (
+                          <div style={{ display: 'inline-block', marginTop: '10px', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', color: aiReviewLabel(post).color, background: aiReviewLabel(post).background, border: `1px solid ${aiReviewLabel(post).border}` }}>
+                            {aiReviewLabel(post).text}
+                          </div>
+                        )}
                         {isPostTakenDown(post) && (
                           <div style={{ marginTop: '10px', padding: '8px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '8px', color: '#ad6800', fontSize: '13px' }}>
                             该帖子已被封禁
                           </div>
                         )}
+                        {isPostRejected(post) && (
+                          <div style={{ marginTop: '10px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '13px' }}>
+                            已打回：{post.aiReview?.reason || '内容未通过审核'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </Link>
+                  {isPostRejected(post) && (
+                    <button
+                      type="button"
+                      onClick={() => handleEditRejectedPost(post)}
+                      style={{
+                        position: 'absolute',
+                        left: '12px',
+                        bottom: '12px',
+                        border: '1px solid #91caff',
+                        background: '#e6f4ff',
+                        color: '#1677ff',
+                        borderRadius: '16px',
+                        height: '30px',
+                        padding: '0 12px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      重新编辑
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDeleteMyPost(post.id)}

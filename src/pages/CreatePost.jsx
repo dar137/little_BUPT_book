@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { categoryAPI, postAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +11,7 @@ const MAX_IMAGES = 9;
 function CreatePost() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // 表单字段
   const [title, setTitle] = useState('');
@@ -43,6 +44,25 @@ function CreatePost() {
 
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('retry') !== '1') return;
+
+    const draft = sessionStorage.getItem('retryPostDraft');
+    if (!draft) return;
+
+    try {
+      const parsed = JSON.parse(draft);
+      setTitle(parsed.title || '');
+      setContent(parsed.content || '');
+      setCategory(parsed.category || '');
+      setEstimatedPrice(parsed.estimatedPrice || '');
+    } catch {
+      // Ignore invalid draft data.
+    } finally {
+      sessionStorage.removeItem('retryPostDraft');
+    }
+  }, [searchParams]);
 
   // 处理从电脑选择图片
   const handleFileSelect = (e) => {

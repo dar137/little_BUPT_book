@@ -30,6 +30,32 @@ const AdminDashboard = () => {
     USER: "用户",
   };
 
+  const aiReviewBadge = (review) => {
+    const result = review?.result;
+    const config = {
+      PASS: { label: "AI 合规", background: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
+      NEED_HUMAN: { label: "AI 可疑", background: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+      REJECT: { label: "AI 不合规", background: "#fff1f0", color: "#cf1322", border: "#ffa39e" },
+    }[result] || { label: "AI 未审核", background: "#f5f5f5", color: "#666", border: "#d9d9d9" };
+
+    return (
+      <span
+        title={review?.reason || config.label}
+        style={{
+          background: config.background,
+          color: config.color,
+          border: `1px solid ${config.border}`,
+          padding: "4px 8px",
+          borderRadius: "20px",
+          fontSize: "12px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {config.label}
+      </span>
+    );
+  };
+
   useEffect(() => {
     if (!currentUser || currentUser.role !== "ADMIN") return;
 
@@ -235,21 +261,29 @@ const AdminDashboard = () => {
                   border: "1px solid #edf2f7",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "12px" }}>
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>{post.title}</h3>
-                  <span
-                    style={{
-                      background: "#fed7d7",
-                      color: "#c53030",
-                      padding: "4px 8px",
-                      borderRadius: "20px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {post.status}
-                  </span>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {aiReviewBadge(post.ai_review)}
+                    <span
+                      style={{
+                        background: "#fed7d7",
+                        color: "#c53030",
+                        padding: "4px 8px",
+                        borderRadius: "20px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {post.status}
+                    </span>
+                  </div>
                 </div>
                 <p style={{ color: "#4a5568", marginBottom: "12px" }}>{post.content}</p>
+                {post.ai_review?.reason && (
+                  <p style={{ color: "#718096", fontSize: "13px", marginBottom: "12px" }}>
+                    AI 审核：{post.ai_review.reason}
+                  </p>
+                )}
                 <div style={{ fontSize: "13px", color: "#718096", marginBottom: "16px" }}>
                   作者：{post.nickname || post.user_id} · 创建时间：{post.created_at}
                 </div>

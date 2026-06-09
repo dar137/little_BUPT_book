@@ -4,10 +4,12 @@ from flask import Blueprint, request
 
 from app import db
 from app.models.post import Post
+from app.models.audit import ModerationRecord
 from app.models.category import Category
 from app.models.post import Post, PostImage, PostLike, PostFavorite
 from app.models.comment import Comment
 from app.models.behavior_event import BehaviorEvent
+from app.services.audit_service import AI_RESULT_REJECT, review_post_content
 from app.services.moderation_service import hide_post
 from app.utils.response import success, fail
 from app.utils.jwt import login_required, optional_login
@@ -34,6 +36,29 @@ def attach_price_marker(content, estimated_price):
         return content
 
     return f"{content}\n<!--ESTIMATED_PRICE:{estimated_price}-->"
+
+
+def latest_ai_record(post_id):
+    return (
+        ModerationRecord.query
+        .filter_by(target_type="POST", target_id=post_id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
+
+
+def format_ai_review(record):
+    if not record:
+        return None
+
+    return {
+        "result": record.ai_result,
+        "riskLevel": record.risk_level,
+        "confidence": float(record.confidence or 0),
+        "reason": record.reason,
+        "model": record.ai_model,
+        "createdAt": str(record.created_at)
+    }
 
 
 def format_post(post, current_user=None):
@@ -73,6 +98,8 @@ def format_post(post, current_user=None):
         "category": post.category.name if post.category else None,
         "estimatedPrice": estimated_price,
         "contentType": post.content_type,
+        "status": post.status,
+        "aiReview": format_ai_review(latest_ai_record(post.id)),
         "createdAt": str(post.published_at or post.created_at),
         "likesCount": post.like_count or 0,
         "collectsCount": post.favorite_count or 0,
@@ -294,10 +321,40 @@ def create_post(current_user):
         )
         db.session.add(post_image)
 
+    clean_content, _ = split_content_meta(content)
+    ai_review = review_post_content(title, clean_content, images)
+    db.session.add(ModerationRecord(
+        target_type="POST",
+        target_id=post.id,
+        submitter_id=current_user.id,
+        review_stage="AI",
+        ai_model=ai_review.get("ai_model"),
+        ai_result=ai_review["ai_result"],
+        risk_level=ai_review["risk_level"],
+        confidence=ai_review["confidence"],
+        final_result=(
+            "REJECT"
+            if ai_review["ai_result"] == AI_RESULT_REJECT
+            else "NEED_HUMAN"
+        ),
+        reason=ai_review["reason"],
+        raw_response=ai_review["raw_response"]
+    ))
+
+    if ai_review["ai_result"] == AI_RESULT_REJECT:
+        post.status = "REJECTED"
+
     db.session.commit()
 
     return success({
-        "id": post.id
+        "id": post.id,
+        "status": post.status,
+        "aiReview": {
+            "result": ai_review["ai_result"],
+            "riskLevel": ai_review["risk_level"],
+            "confidence": ai_review["confidence"],
+            "reason": ai_review["reason"]
+        }
     })
 
 

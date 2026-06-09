@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, request, send_from_directory
 
 from app.extensions import db
 from app.middlewares.admin_required import admin_required
+from app.models.audit import ModerationRecord
 from app.models.comment import Comment
 from app.models.post import Post
 from app.models.report import Report
@@ -25,6 +26,13 @@ def format_datetime(value):
 
 
 def serialize_post(post):
+    ai_record = (
+        ModerationRecord.query
+        .filter_by(target_type="POST", target_id=post.id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
+
     return {
         "id": post.id,
         "user_id": post.user_id,
@@ -42,6 +50,14 @@ def serialize_post(post):
         "published_at": format_datetime(post.published_at),
         "created_at": format_datetime(post.created_at),
         "updated_at": format_datetime(post.updated_at),
+        "ai_review": {
+            "result": ai_record.ai_result,
+            "risk_level": ai_record.risk_level,
+            "confidence": float(ai_record.confidence or 0),
+            "reason": ai_record.reason,
+            "model": ai_record.ai_model,
+            "created_at": format_datetime(ai_record.created_at)
+        } if ai_record else None,
         "images": [
             {
                 "id": image.id,

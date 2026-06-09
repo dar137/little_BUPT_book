@@ -7,6 +7,7 @@ import re
 
 from app import db
 from app.models.user import User
+from app.models.audit import ModerationRecord
 from app.models.post import Post, PostFavorite, PostImage, PostLike
 from app.models.comment import Comment
 from app.models.behavior_event import BehaviorEvent
@@ -44,11 +45,18 @@ def format_user_post(post):
         .order_by(PostImage.sort_order.asc())
         .first()
     )
+    ai_record = (
+        ModerationRecord.query
+        .filter_by(target_type="POST", target_id=post.id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
 
     return {
         "id": post.id,
         "title": post.title,
         "summary": content[:100] if content else "",
+        "content": content,
         "coverImage": first_image.image_url if first_image else None,
         "author": {
             "id": post.user.id,
@@ -60,6 +68,14 @@ def format_user_post(post):
         "estimatedPrice": estimated_price,
         "contentType": post.content_type,
         "status": post.status,
+        "aiReview": {
+            "result": ai_record.ai_result,
+            "riskLevel": ai_record.risk_level,
+            "confidence": float(ai_record.confidence or 0),
+            "reason": ai_record.reason,
+            "model": ai_record.ai_model,
+            "createdAt": str(ai_record.created_at)
+        } if ai_record else None,
         "createdAt": str(post.published_at or post.created_at),
         "likesCount": post.like_count or 0,
         "collectsCount": post.favorite_count or 0,
