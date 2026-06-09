@@ -69,17 +69,50 @@ def serialize_post(post):
     }
 
 
+def serialize_comment(comment):
+    ai_record = (
+        ModerationRecord.query
+        .filter_by(target_type="COMMENT", target_id=comment.id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
+
+    return {
+        "id": comment.id,
+        "post_id": comment.post_id,
+        "post_title": comment.post.title if comment.post else None,
+        "user_id": comment.user_id,
+        "nickname": comment.user.nickname if comment.user else None,
+        "content": comment.content,
+        "status": comment.status,
+        "parent_id": comment.parent_id,
+        "created_at": format_datetime(comment.created_at),
+        "updated_at": format_datetime(comment.updated_at),
+        "ai_review": {
+            "result": ai_record.ai_result,
+            "risk_level": ai_record.risk_level,
+            "confidence": float(ai_record.confidence or 0),
+            "reason": ai_record.reason,
+            "model": ai_record.ai_model,
+            "created_at": format_datetime(ai_record.created_at)
+        } if ai_record else None,
+    }
+
+
 def serialize_report(report):
     target_title = None
     target_post_id = None
+    target_post_title = None
     if report.target_type == "POST":
         post = Post.query.get(report.target_id)
         target_title = post.title if post else None
         target_post_id = post.id if post else None
+        target_post_title = post.title if post else None
     elif report.target_type == "COMMENT":
         comment = Comment.query.get(report.target_id)
-        target_title = comment.post.title if comment and comment.post else None
+        target_title = comment.content if comment else None
         target_post_id = comment.post_id if comment else None
+        target_post_title = comment.post.title if comment and comment.post else None
 
     return {
         "id": report.id,
@@ -89,6 +122,7 @@ def serialize_report(report):
         "target_id": report.target_id,
         "target_title": target_title,
         "target_post_id": target_post_id,
+        "target_post_title": target_post_title,
         "reason_type": report.reason_type,
         "reason_detail": report.reason_detail,
         "status": report.status,
@@ -130,6 +164,21 @@ def get_pending_posts():
     })
 
 
+@admin_bp.route("/pending-comments", methods=["GET"])
+@admin_required
+def get_pending_comments():
+    comments = (
+        Comment.query
+        .filter_by(status="PENDING_REVIEW")
+        .order_by(Comment.created_at.desc())
+        .all()
+    )
+
+    return success({
+        "list": [serialize_comment(comment) for comment in comments]
+    })
+
+
 @admin_bp.route("/approve-post/<int:post_id>", methods=["POST"])
 @admin_required
 def approve_post(post_id):
@@ -164,12 +213,104 @@ def delete_post(post_id):
     return success(None, message="帖子已删除")
 
 
+@admin_bp.route("/reject-post/<int:post_id>", methods=["POST"])
+@admin_required
+def reject_post(post_id):
+    post = Post.query.get(post_id)
+
+    if not post:
+        return fail("帖子不存在", code=404, status_code=404)
+
+    if post.status == "DELETED":
+        return fail("帖子已删除，无法审核不通过", code=400, status_code=400)
+
+    post.status = "REJECTED"
+
+    db.session.add(ModerationRecord(
+        target_type="POST",
+        target_id=post.id,
+        submitter_id=post.user_id,
+        reviewer_id=request.current_user.id,
+        review_stage="HUMAN",
+        human_result="REJECT",
+        final_result="REJECT",
+        reason="人工审核不通过",
+        reviewed_at=datetime.utcnow()
+    ))
+    db.session.commit()
+
+    return success(None, message="帖子审核不通过")
+
+
+@admin_bp.route("/approve-comment/<int:comment_id>", methods=["POST"])
+@admin_required
+def approve_comment(comment_id):
+    comment = Comment.query.get(comment_id)
+
+    if not comment:
+        return fail("评论不存在", code=404, status_code=404)
+
+    if comment.status == "DELETED":
+        return fail("评论已删除，无法审核通过", code=400, status_code=400)
+
+    comment.status = "PUBLISHED"
+    db.session.add(ModerationRecord(
+        target_type="COMMENT",
+        target_id=comment.id,
+        submitter_id=comment.user_id,
+        reviewer_id=request.current_user.id,
+        review_stage="HUMAN",
+        human_result="PASS",
+        final_result="PASS",
+        reason="人工审核通过",
+        reviewed_at=datetime.utcnow()
+    ))
+    recalculate_post_counts(comment.post)
+    db.session.commit()
+
+    return success(None, message="评论审核通过")
+
+
+@admin_bp.route("/reject-comment/<int:comment_id>", methods=["POST"])
+@admin_required
+def reject_comment(comment_id):
+    comment = Comment.query.get(comment_id)
+
+    if not comment:
+        return fail("评论不存在", code=404, status_code=404)
+
+    if comment.status == "DELETED":
+        return fail("评论已删除，无法审核不通过", code=400, status_code=400)
+
+    comment.status = "REJECTED"
+    db.session.add(ModerationRecord(
+        target_type="COMMENT",
+        target_id=comment.id,
+        submitter_id=comment.user_id,
+        reviewer_id=request.current_user.id,
+        review_stage="HUMAN",
+        human_result="REJECT",
+        final_result="REJECT",
+        reason="人工复审不通过",
+        reviewed_at=datetime.utcnow()
+    ))
+    recalculate_post_counts(comment.post)
+    db.session.commit()
+
+    return success(None, message="评论审核不通过")
+
+
 @admin_bp.route("/reports", methods=["GET"])
 @admin_required
 def get_reports():
+    target_type = request.args.get("targetType")
+    query = Report.query.filter_by(status="PENDING")
+
+    if target_type in ["POST", "COMMENT"]:
+        query = query.filter(Report.target_type == target_type)
+
     reports = (
-        Report.query
-        .filter_by(status="PENDING")
+        query
         .order_by(Report.created_at.desc())
         .all()
     )

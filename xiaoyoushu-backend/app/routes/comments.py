@@ -1,8 +1,10 @@
 from flask import Blueprint, request
 
 from app import db
+from app.models.audit import ModerationRecord
 from app.models.post import Post
 from app.models.comment import Comment
+from app.services.audit_service import AI_RESULT_PASS, AI_RESULT_REJECT, review_comment_content
 from app.services.moderation_service import mark_comment_deleted, recalculate_post_counts
 from app.utils.response import success, fail
 from app.utils.jwt import login_required
@@ -36,15 +38,123 @@ def create_comment(post_id, current_user):
         post_id=post.id,
         user_id=current_user.id,
         content=content,
-        status="PUBLISHED",
+        status="PENDING_REVIEW",
         parent_id=parent_id
     )
 
     db.session.add(comment)
-    post.comment_count = (post.comment_count or 0) + 1
+    db.session.flush()
+
+    ai_review = review_comment_content(content)
+    db.session.add(ModerationRecord(
+        target_type="COMMENT",
+        target_id=comment.id,
+        submitter_id=current_user.id,
+        review_stage="AI",
+        ai_model=ai_review.get("ai_model"),
+        ai_result=ai_review["ai_result"],
+        risk_level=ai_review["risk_level"],
+        confidence=ai_review["confidence"],
+        final_result=(
+            "PASS"
+            if ai_review["ai_result"] == AI_RESULT_PASS
+            else
+            "REJECT"
+            if ai_review["ai_result"] == AI_RESULT_REJECT
+            else "NEED_HUMAN"
+        ),
+        reason=ai_review["reason"],
+        raw_response=ai_review["raw_response"]
+    ))
+
+    if ai_review["ai_result"] == AI_RESULT_PASS:
+        comment.status = "PUBLISHED"
+        post.comment_count = (post.comment_count or 0) + 1
+    elif ai_review["ai_result"] == AI_RESULT_REJECT:
+        comment.status = "REJECTED"
+
     db.session.commit()
 
-    return success(None)
+    return success({
+        "id": comment.id,
+        "status": comment.status,
+        "aiReview": {
+            "result": ai_review["ai_result"],
+            "riskLevel": ai_review["risk_level"],
+            "confidence": ai_review["confidence"],
+            "reason": ai_review["reason"]
+        }
+    })
+
+
+@comment_bp.route("/<int:post_id>/comments/<int:comment_id>", methods=["PUT"])
+@login_required
+def update_comment(post_id, comment_id, current_user):
+    data = request.get_json() or {}
+    content = data.get("content")
+
+    if not content:
+        return fail("评论内容不能为空", code=400, status_code=400)
+
+    comment = Comment.query.filter_by(id=comment_id, post_id=post_id).first()
+
+    if not comment:
+        return fail("评论不存在", code=404, status_code=404)
+
+    if comment.user_id != current_user.id:
+        return fail("无权限编辑该评论", code=403, status_code=403)
+
+    if comment.status == "DELETED":
+        return fail("评论已删除，无法编辑", code=400, status_code=400)
+
+    was_published = comment.status == "PUBLISHED"
+    comment.content = content
+    comment.status = "PENDING_REVIEW"
+
+    ai_review = review_comment_content(content)
+    db.session.add(ModerationRecord(
+        target_type="COMMENT",
+        target_id=comment.id,
+        submitter_id=current_user.id,
+        review_stage="AI",
+        ai_model=ai_review.get("ai_model"),
+        ai_result=ai_review["ai_result"],
+        risk_level=ai_review["risk_level"],
+        confidence=ai_review["confidence"],
+        final_result=(
+            "PASS"
+            if ai_review["ai_result"] == AI_RESULT_PASS
+            else
+            "REJECT"
+            if ai_review["ai_result"] == AI_RESULT_REJECT
+            else "NEED_HUMAN"
+        ),
+        reason=ai_review["reason"],
+        raw_response=ai_review["raw_response"]
+    ))
+
+    if ai_review["ai_result"] == AI_RESULT_PASS:
+        comment.status = "PUBLISHED"
+    elif ai_review["ai_result"] == AI_RESULT_REJECT:
+        comment.status = "REJECTED"
+
+    if was_published and comment.status != "PUBLISHED":
+        recalculate_post_counts(comment.post)
+    elif not was_published and comment.status == "PUBLISHED":
+        recalculate_post_counts(comment.post)
+
+    db.session.commit()
+
+    return success({
+        "id": comment.id,
+        "status": comment.status,
+        "aiReview": {
+            "result": ai_review["ai_result"],
+            "riskLevel": ai_review["risk_level"],
+            "confidence": ai_review["confidence"],
+            "reason": ai_review["reason"]
+        }
+    })
 
 
 @comment_bp.route("/<int:post_id>/comments/<int:comment_id>", methods=["DELETE"])

@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 from flask import Blueprint, request
 
@@ -9,7 +10,7 @@ from app.models.category import Category
 from app.models.post import Post, PostImage, PostLike, PostFavorite
 from app.models.comment import Comment
 from app.models.behavior_event import BehaviorEvent
-from app.services.audit_service import AI_RESULT_REJECT, review_post_content
+from app.services.audit_service import AI_RESULT_PASS, AI_RESULT_REJECT, review_post_content
 from app.services.moderation_service import hide_post
 from app.utils.response import success, fail
 from app.utils.jwt import login_required, optional_login
@@ -109,11 +110,22 @@ def format_post(post, current_user=None):
     }
 
 
-def format_comment(comment):
+def latest_comment_ai_record(comment_id):
+    return (
+        ModerationRecord.query
+        .filter_by(target_type="COMMENT", target_id=comment_id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
+
+
+def format_comment(comment, current_user=None):
     return {
         "id": comment.id,
         "content": comment.content,
         "parentId": comment.parent_id,
+        "status": comment.status,
+        "aiReview": format_ai_review(latest_comment_ai_record(comment.id)),
         "createdAt": str(comment.created_at),
         "likesCount": comment.like_count or 0,
         "author": {
@@ -123,9 +135,12 @@ def format_comment(comment):
             "role": comment.user.role
         },
         "replies": [
-            format_comment(reply)
+            format_comment(reply, current_user)
             for reply in sorted(comment.replies, key=lambda item: item.created_at)
-            if reply.status == "PUBLISHED" and not reply.deleted_at
+            if (
+                reply.status == "PUBLISHED"
+                or (current_user and reply.user_id == current_user.id and reply.status in ["PENDING_REVIEW", "REJECTED"])
+            ) and not reply.deleted_at
         ]
     }
 
@@ -199,7 +214,11 @@ def get_post_detail(post_id, current_user=None):
     if admin_review and current_user and current_user.role == "ADMIN":
         post = Post.query.filter_by(id=post_id, status="PENDING_REVIEW").first()
     else:
-        post = Post.query.filter_by(id=post_id, status="PUBLISHED").first()
+        post = Post.query.filter_by(id=post_id).first()
+        if post and post.status != "PUBLISHED":
+            is_author = current_user and current_user.id == post.user_id
+            if post.status == "DELETED" or not is_author:
+                post = None
 
     if not post:
         return fail("资源不存在", code=404, status_code=404)
@@ -215,14 +234,24 @@ def get_post_detail(post_id, current_user=None):
 
     is_liked = False
     is_collected = False
-    comments = (
-        Comment.query
-        .filter_by(post_id=post.id, parent_id=None, status="PUBLISHED")
-        .order_by(Comment.created_at.asc())
-        .all()
+    comments_query = Comment.query.filter(
+        Comment.post_id == post.id,
+        Comment.parent_id.is_(None)
     )
-
     if current_user:
+        comments_query = comments_query.filter(db.or_(
+            Comment.status == "PUBLISHED",
+            db.and_(
+                Comment.user_id == current_user.id,
+                Comment.status.in_(["PENDING_REVIEW", "REJECTED"])
+            )
+        ))
+    else:
+        comments_query = comments_query.filter(Comment.status == "PUBLISHED")
+
+    comments = comments_query.order_by(Comment.created_at.asc()).all()
+
+    if current_user and post.status == "PUBLISHED":
         is_liked = PostLike.query.filter_by(
             post_id=post.id,
             user_id=current_user.id
@@ -258,13 +287,15 @@ def get_post_detail(post_id, current_user=None):
         "category": post.category.name if post.category else None,
         "estimatedPrice": estimated_price,
         "contentType": post.content_type,
+        "status": post.status,
+        "aiReview": format_ai_review(latest_ai_record(post.id)),
         "createdAt": str(post.published_at or post.created_at),
         "likesCount": post.like_count or 0,
         "collectsCount": post.favorite_count or 0,
         "commentsCount": post.comment_count or 0,
         "isLiked": is_liked,
         "isCollected": is_collected,
-        "comments": [format_comment(comment) for comment in comments]
+        "comments": [format_comment(comment, current_user) for comment in comments]
     })
 
 
@@ -333,6 +364,9 @@ def create_post(current_user):
         risk_level=ai_review["risk_level"],
         confidence=ai_review["confidence"],
         final_result=(
+            "PASS"
+            if ai_review["ai_result"] == AI_RESULT_PASS
+            else
             "REJECT"
             if ai_review["ai_result"] == AI_RESULT_REJECT
             else "NEED_HUMAN"
@@ -341,7 +375,10 @@ def create_post(current_user):
         raw_response=ai_review["raw_response"]
     ))
 
-    if ai_review["ai_result"] == AI_RESULT_REJECT:
+    if ai_review["ai_result"] == AI_RESULT_PASS:
+        post.status = "PUBLISHED"
+        post.published_at = datetime.utcnow()
+    elif ai_review["ai_result"] == AI_RESULT_REJECT:
         post.status = "REJECTED"
 
     db.session.commit()

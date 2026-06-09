@@ -65,7 +65,7 @@ const UserProfile = () => {
         {posts.length === 0 ? (
           <p>暂无帖子</p>
         ) : (
-          posts.map(post => <PostCard key={post.id} post={post} onReport={() => {}} />)
+          posts.map(post => <PostCard key={post.id} post={post} />)
         )}
       </div>
     </div>

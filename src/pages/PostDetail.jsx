@@ -24,12 +24,15 @@ function PostDetail() {
   // ===== 回复相关状态 =====
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyContent, setReplyContent] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
 
   // ===== 点赞/收藏状态（由后端返回，不再本地维护） =====
   const [returnPressed, setReturnPressed] = useState(false);
 
   // ===== 举报相关状态 =====
   const [showReportModal, setShowReportModal] = useState(false);
+  const [reportTarget, setReportTarget] = useState({ type: 'POST', id: null, title: '帖子' });
   const [reportReason, setReportReason] = useState('');
   const [reportDetail, setReportDetail] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -38,7 +41,8 @@ function PostDetail() {
 
   // 举报原因映射（前端显示用中文，发送给后端用英文）
   const reportReasons = [
-    { label: '色情低俗', value: 'SPAM' },
+    { label: '色情低俗', value: 'PORN' },
+    { label: '垃圾广告', value: 'SPAM' },
     { label: '广告营销', value: 'AD' },
     { label: '人身攻击', value: 'ABUSE' },
     { label: '虚假信息', value: 'FALSE_INFO' },
@@ -114,9 +118,14 @@ function PostDetail() {
 
     setSubmittingComment(true);
     try {
-      await postAPI.addComment(post.id, { content: newComment });
+      const result = await postAPI.addComment(post.id, { content: newComment });
       setNewComment('');
       await fetchPostDetail();
+      if (result?.status === 'PENDING_REVIEW') {
+        alert('评论已提交，正在审核中');
+      } else if (result?.status === 'REJECTED') {
+        alert('评论未通过 AI 审核，可重新编辑或删除');
+      }
     } catch (err) {
       alert('评论失败：' + (err.message || '请稍后重试'));
     } finally {
@@ -134,21 +143,27 @@ function PostDetail() {
     }
 
     try {
-      await postAPI.addComment(post.id, { content: replyContent, parentId: commentId });
+      const result = await postAPI.addComment(post.id, { content: replyContent, parentId: commentId });
       setReplyContent('');
       setReplyingTo(null);
       await fetchPostDetail();
+      if (result?.status === 'PENDING_REVIEW') {
+        alert('回复已提交，正在审核中');
+      } else if (result?.status === 'REJECTED') {
+        alert('回复未通过 AI 审核，可重新编辑或删除');
+      }
     } catch (err) {
       alert('回复失败：' + (err.message || '请稍后重试'));
     }
   };
 
   // ===== 打开举报弹窗 =====
-  const openReportModal = () => {
+  const openReportModal = (target = { type: 'POST', id: post?.id, title: '帖子' }) => {
     if (!currentUser) {
       alert('请先登录');
       return;
     }
+    setReportTarget(target);
     setReportReason('');
     setReportDetail('');
     setShowReportModal(true);
@@ -164,8 +179,8 @@ function PostDetail() {
     setSubmittingReport(true);
     try {
       await reportAPI.submit({
-        targetType: 'POST',
-        targetId: post.id,
+        targetType: reportTarget.type,
+        targetId: reportTarget.id,
         reasonType: reportReason,
         reasonDetail: reportDetail || undefined,
       });
@@ -208,8 +223,8 @@ function PostDetail() {
         await adminAPI.approvePost(post.id);
         alert(`帖子 ${post.id} 已通过，将正常发布`);
       } else {
-        await adminAPI.deletePost(post.id);
-        alert(`帖子 ${post.id} 已删除`);
+        await adminAPI.rejectPost(post.id);
+        alert(`帖子 ${post.id} 已打回`);
       }
       navigate('/admin');
     } catch (err) {
@@ -246,6 +261,36 @@ function PostDetail() {
   const canDeleteComment = (comment) => (
     currentUser?.role === 'ADMIN' || currentUser?.id === comment.author?.id
   );
+  const canEditComment = (comment) => (
+    currentUser?.id === comment.author?.id && ["PENDING_REVIEW", "REJECTED"].includes(comment.status)
+  );
+  const startEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentContent(comment.content || '');
+  };
+  const handleUpdateComment = async (commentId) => {
+    if (!editingCommentContent.trim()) return;
+
+    try {
+      const result = await postAPI.updateComment(post.id, commentId, { content: editingCommentContent.trim() });
+      setEditingCommentId(null);
+      setEditingCommentContent('');
+      await fetchPostDetail();
+      if (result?.status === 'PENDING_REVIEW') {
+        alert('评论已提交，正在审核中');
+      } else if (result?.status === 'REJECTED') {
+        alert('评论未通过 AI 审核，可继续编辑或删除');
+      }
+    } catch (err) {
+      alert('编辑评论失败：' + (err.message || '请稍后重试'));
+    }
+  };
+  const commentStatusLabel = (comment) => {
+    if (comment.status === 'PENDING_REVIEW') return '审核中';
+    if (comment.status === 'REJECTED') return '人工复审不通过';
+    return '';
+  };
+  const showInteractions = !isPostReview && post?.status === 'PUBLISHED';
 
   // ===== 加载状态 =====
   if (loading) {
@@ -352,7 +397,10 @@ function PostDetail() {
       }}>
         {/* 作者信息（可点击跳转到用户主页） */}
         <Link
-          to={`/user/${post.author?.id}`}
+          to={isPostReview ? '#' : `/user/${post.author?.id}`}
+          onClick={(e) => {
+            if (isPostReview) e.preventDefault();
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -428,7 +476,14 @@ function PostDetail() {
           {post.createdAt}
         </div>
 
+        {post.aiReview?.reason && (
+          <div style={{ color: '#718096', fontSize: '13px', marginBottom: '12px', textAlign: 'right' }}>
+            AI 审核：{post.aiReview.reason}
+          </div>
+        )}
+
         {/* 互动栏 */}
+        {showInteractions && (
         <div style={{
           display: 'flex', justifyContent: 'center', gap: '24px',
           padding: '15px 0 0 0', borderTop: '1px solid #eee', flexWrap: 'wrap'
@@ -458,7 +513,7 @@ function PostDetail() {
             <span>{post.collectsCount ?? 0}</span>
           </button>
 
-          <button onClick={openReportModal} style={{
+          <button onClick={() => openReportModal({ type: 'POST', id: post.id, title: '帖子' })} style={{
             display: 'flex', alignItems: 'center', gap: '4px',
             background: 'none', border: 'none', cursor: 'pointer',
             color: '#999', fontSize: '14px',
@@ -479,6 +534,7 @@ function PostDetail() {
             </button>
           )}
         </div>
+        )}
       </div>
 
       {isPostReview && (
@@ -578,6 +634,7 @@ function PostDetail() {
       )}
 
       {/* ==================== 评论区卡片 ==================== */}
+      {showInteractions && (
       <div style={{
         backgroundColor: '#fff', borderRadius: '12px', padding: '20px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #eee'
@@ -607,10 +664,38 @@ function PostDetail() {
                   </div>
                 </div>
               </div>
-              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555', textAlign: 'left' }}>{comment.content}</p>
+              {editingCommentId === comment.id ? (
+                <div style={{ marginBottom: '8px' }}>
+                  <textarea
+                    value={editingCommentContent}
+                    onChange={(e) => setEditingCommentContent(e.target.value)}
+                    rows="2"
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '6px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                    <button onClick={() => setEditingCommentId(null)} style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid #ddd', backgroundColor: '#f5f5f5', fontSize: '12px', cursor: 'pointer' }}>取消</button>
+                    <button onClick={() => handleUpdateComment(comment.id)} style={{ padding: '4px 12px', borderRadius: '4px', border: 'none', backgroundColor: '#1890ff', color: 'white', fontSize: '12px', cursor: 'pointer' }}>保存</button>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555', textAlign: 'left' }}>{comment.content}</p>
+              )}
+              {commentStatusLabel(comment) && (
+                <div style={{ display: 'inline-block', marginBottom: '8px', padding: '3px 8px', borderRadius: '12px', background: comment.status === 'REJECTED' ? '#fff1f0' : '#fffbe6', color: comment.status === 'REJECTED' ? '#cf1322' : '#d48806', border: `1px solid ${comment.status === 'REJECTED' ? '#ffa39e' : '#ffe58f'}`, fontSize: '12px' }}>
+                  {commentStatusLabel(comment)}{comment.aiReview?.reason ? `：${comment.aiReview.reason}` : ''}
+                </div>
+              )}
 
               {replyingTo !== comment.id ? (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                  {canEditComment(comment) && (
+                    <button
+                      onClick={() => startEditComment(comment)}
+                      style={{ padding: '3px 10px', borderRadius: '12px', border: '1px solid #91caff', backgroundColor: '#e6f4ff', color: '#1677ff', fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      编辑
+                    </button>
+                  )}
                   {canDeleteComment(comment) && (
                     <button
                       onClick={() => handleDeleteComment(comment.id)}
@@ -627,6 +712,23 @@ function PostDetail() {
                       删除
                     </button>
                   )}
+                  <button
+                    onClick={() => openReportModal({ type: 'COMMENT', id: comment.id, title: '评论' })}
+                    disabled={comment.status !== 'PUBLISHED'}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      border: '1px solid #ffe0b2',
+                      backgroundColor: '#fffaf0',
+                      color: '#b7791f',
+                      fontSize: '12px',
+                      cursor: comment.status === 'PUBLISHED' ? 'pointer' : 'not-allowed',
+                      opacity: comment.status === 'PUBLISHED' ? 1 : 0.5
+                    }}
+                  >
+                    举报
+                  </button>
+                  {comment.status === 'PUBLISHED' && (
                   <button
                     onClick={() => {
                       setReplyingTo(comment.id);
@@ -645,6 +747,7 @@ function PostDetail() {
                   >
                     💬 回复
                   </button>
+                  )}
                 </div>
               ) : (
                 <div style={{ marginTop: '8px' }}>
@@ -714,7 +817,35 @@ function PostDetail() {
                           </div>
                         </div>
                       </div>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#666', textAlign: 'left' }}>{reply.content}</p>
+                      {editingCommentId === reply.id ? (
+                        <div style={{ marginBottom: '8px' }}>
+                          <textarea
+                            value={editingCommentContent}
+                            onChange={(e) => setEditingCommentContent(e.target.value)}
+                            rows="2"
+                            style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '6px' }}
+                          />
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <button onClick={() => setEditingCommentId(null)} style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid #ddd', backgroundColor: '#f5f5f5', fontSize: '12px', cursor: 'pointer' }}>取消</button>
+                            <button onClick={() => handleUpdateComment(reply.id)} style={{ padding: '4px 12px', borderRadius: '4px', border: 'none', backgroundColor: '#1890ff', color: 'white', fontSize: '12px', cursor: 'pointer' }}>保存</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '13px', color: '#666', textAlign: 'left' }}>{reply.content}</p>
+                      )}
+                      {commentStatusLabel(reply) && (
+                        <div style={{ display: 'inline-block', marginTop: '6px', padding: '3px 8px', borderRadius: '12px', background: reply.status === 'REJECTED' ? '#fff1f0' : '#fffbe6', color: reply.status === 'REJECTED' ? '#cf1322' : '#d48806', border: `1px solid ${reply.status === 'REJECTED' ? '#ffa39e' : '#ffe58f'}`, fontSize: '12px' }}>
+                          {commentStatusLabel(reply)}{reply.aiReview?.reason ? `：${reply.aiReview.reason}` : ''}
+                        </div>
+                      )}
+                      {canEditComment(reply) && (
+                        <button
+                          onClick={() => startEditComment(reply)}
+                          style={{ position: 'absolute', right: canDeleteComment(reply) ? '108px' : '72px', bottom: 0, border: 'none', background: 'transparent', color: '#1677ff', cursor: 'pointer', fontSize: '12px', padding: 0 }}
+                        >
+                          编辑
+                        </button>
+                      )}
                       {canDeleteComment(reply) && (
                         <button
                           onClick={() => handleDeleteComment(reply.id)}
@@ -733,6 +864,24 @@ function PostDetail() {
                           删除
                         </button>
                       )}
+                      <button
+                        onClick={() => openReportModal({ type: 'COMMENT', id: reply.id, title: '评论' })}
+                        disabled={reply.status !== 'PUBLISHED'}
+                        style={{
+                          position: 'absolute',
+                          right: canDeleteComment(reply) ? '72px' : '38px',
+                          bottom: 0,
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#b7791f',
+                          cursor: reply.status === 'PUBLISHED' ? 'pointer' : 'not-allowed',
+                          fontSize: '12px',
+                          padding: 0,
+                          opacity: reply.status === 'PUBLISHED' ? 1 : 0.5
+                        }}
+                      >
+                        举报
+                      </button>
                       <span style={{ position: 'absolute', right: 0, bottom: 0, color: '#aaa', fontSize: '12px' }}>{index + 1}楼</span>
                     </div>
                   ))}
@@ -767,6 +916,7 @@ function PostDetail() {
           <div style={{ clear: 'both' }}></div>
         </form>
       </div>
+      )}
 
       {/* ==================== 举报弹窗 ==================== */}
       {showReportModal && (
@@ -784,7 +934,7 @@ function PostDetail() {
           onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: '#333' }}>
-              🚩 举报帖子
+              🚩 举报{reportTarget.title}
             </h3>
 
             <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>请选择举报原因：</p>

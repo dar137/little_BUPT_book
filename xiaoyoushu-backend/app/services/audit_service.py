@@ -158,3 +158,7 @@ def review_post_content(title, content, image_urls):
             "raw_response": {"error": str(exc)},
             "ai_model": model,
         }
+
+
+def review_comment_content(content):
+    return review_post_content("评论", content, [])

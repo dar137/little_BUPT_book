@@ -100,8 +100,11 @@ const Report = () => {
             <label>举报原因</label>
             <select name="reasonType" value={formData.reasonType} onChange={handleChange} style={styles.input} required>
               <option value="">请选择</option>
+              <option value="PORN">色情低俗</option>
               <option value="SPAM">垃圾广告</option>
+              <option value="AD">广告营销</option>
               <option value="ABUSE">人身攻击</option>
+              <option value="FALSE_INFO">虚假信息</option>
               <option value="ILLEGAL">违法违规</option>
               <option value="OTHER">其他</option>
             </select>

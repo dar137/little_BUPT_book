@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import CategoryTabs from '../components/CategoryTabs';
 import { categoryAPI, postAPI } from '../api';
 
 function Home() {
-  const navigate = useNavigate();
   const [activeTag, setActiveTag] = useState('全部');
   const [posts, setPosts] = useState([]);
   const [categories, setCategories] = useState(['全部']);
@@ -49,16 +47,6 @@ function Home() {
     fetchCategories();
   }, []);
 
-  const handleReport = (post) => {
-    localStorage.setItem('reportTarget', JSON.stringify({
-      targetType: 'post',
-      targetId: post.id,
-      targetTitle: post.title,
-      targetAuthor: post.author?.nickname || '未知'
-    }));
-    navigate('/report');
-  };
-
   return (
     <div style={{ padding: '20px' }}>
       <CategoryTabs
@@ -80,7 +68,6 @@ function Home() {
           <PostCard
             key={post.id}
             post={post}
-            onReport={handleReport}
           />
         ))
       ) : (

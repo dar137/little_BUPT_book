@@ -7,6 +7,23 @@ import { useAuth } from '../context/AuthContext';
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
 const MAX_IMAGES = 9;
+const UPLOAD_TIMEOUT_MS = 30000;
+
+async function uploadWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('图片上传超时，请检查后端服务或稍后重试');
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 function CreatePost() {
   const { currentUser } = useAuth();
@@ -115,7 +132,7 @@ function CreatePost() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${BASE_URL}/upload/post-image`, {
+        const response = await uploadWithTimeout(`${BASE_URL}/upload/post-image`, {
           method: 'POST',
           headers: {
             // 注意：上传文件时不能设置 Content-Type，让浏览器自动处理
@@ -189,7 +206,7 @@ function CreatePost() {
       }
 
       // 2. 提交帖子
-      await postAPI.create({
+      const result = await postAPI.create({
         title: title.trim(),
         content: content.trim(),
         category: category,
@@ -197,7 +214,12 @@ function CreatePost() {
         images: imageUrls
       });
 
-      alert('帖子发布成功，等待审核');
+      const publishMessage = {
+        PUBLISHED: '帖子发布成功',
+        PENDING_REVIEW: '帖子已提交，等待管理员审核',
+        REJECTED: '帖子未通过 AI 审核，可在个人主页重新编辑或删除',
+      }[result?.status] || '帖子已提交';
+      alert(publishMessage);
       
       // 清空表单
       setTitle('');

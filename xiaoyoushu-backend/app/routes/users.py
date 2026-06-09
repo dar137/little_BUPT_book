@@ -349,10 +349,24 @@ def get_my_favorites(current_user):
 
 
 def format_user_comment(comment):
+    ai_record = (
+        ModerationRecord.query
+        .filter_by(target_type="COMMENT", target_id=comment.id, review_stage="AI")
+        .order_by(ModerationRecord.created_at.desc(), ModerationRecord.id.desc())
+        .first()
+    )
     return {
         "id": comment.id,
         "content": comment.content,
         "status": comment.status,
+        "aiReview": {
+            "result": ai_record.ai_result,
+            "riskLevel": ai_record.risk_level,
+            "confidence": float(ai_record.confidence or 0),
+            "reason": ai_record.reason,
+            "model": ai_record.ai_model,
+            "createdAt": str(ai_record.created_at)
+        } if ai_record else None,
         "createdAt": str(comment.created_at),
         "post": format_user_post(comment.post) if comment.post else None
     }
@@ -369,7 +383,7 @@ def get_my_comments(current_user):
         .join(Post, Comment.post_id == Post.id)
         .filter(
             Comment.user_id == current_user.id,
-            Comment.status == "PUBLISHED",
+            Comment.status != "DELETED",
             Post.status == "PUBLISHED"
         )
         .order_by(Comment.created_at.desc())

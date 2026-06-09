@@ -8,7 +8,9 @@ const AdminDashboard = () => {
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("ai_review");
   const [pendingPosts, setPendingPosts] = useState([]);
-  const [reports, setReports] = useState([]);
+  const [pendingComments, setPendingComments] = useState([]);
+  const [postReports, setPostReports] = useState([]);
+  const [commentReports, setCommentReports] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [selectedRegistration, setSelectedRegistration] = useState(null);
   const [cardPreviewUrl, setCardPreviewUrl] = useState("");
@@ -16,6 +18,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState("");
 
   const reportReasonLabels = {
+    PORN: "色情低俗",
     SPAM: "垃圾广告",
     AD: "广告营销",
     ABUSE: "人身攻击",
@@ -63,12 +66,16 @@ const AdminDashboard = () => {
       setLoading(true);
       setError("");
       try {
-        const [postsData, reportsData] = await Promise.all([
+        const [postsData, commentsData, postReportsData, commentReportsData] = await Promise.all([
           adminAPI.getPendingPosts(),
-          adminAPI.getReports(),
+          adminAPI.getPendingComments(),
+          adminAPI.getReports({ targetType: "POST" }),
+          adminAPI.getReports({ targetType: "COMMENT" }),
         ]);
         setPendingPosts(postsData.list || []);
-        setReports(reportsData.list || []);
+        setPendingComments(commentsData.list || []);
+        setPostReports(postReportsData.list || []);
+        setCommentReports(commentReportsData.list || []);
         try {
           const registrationsData = await adminAPI.getRegistrations();
           setRegistrations(registrationsData.list || []);
@@ -119,6 +126,19 @@ const AdminDashboard = () => {
       }
       setRegistrations(prev => prev.filter(item => item.id !== registration.id));
       setSelectedRegistration(null);
+    } catch (err) {
+      alert("处理失败：" + (err.message || "请稍后重试"));
+    }
+  };
+
+  const handleCommentReview = async (comment, decision) => {
+    try {
+      if (decision === "approve") {
+        await adminAPI.approveComment(comment.id);
+      } else {
+        await adminAPI.rejectComment(comment.id);
+      }
+      setPendingComments(prev => prev.filter(item => item.id !== comment.id));
     } catch (err) {
       alert("处理失败：" + (err.message || "请稍后重试"));
     }
@@ -182,18 +202,46 @@ const AdminDashboard = () => {
           AI发帖复核 ({pendingPosts.length})
         </button>
         <button
-          onClick={() => setActiveTab("reports")}
+          onClick={() => setActiveTab("post_reports")}
           style={{
             padding: "10px 20px",
             fontSize: "16px",
-            fontWeight: activeTab === "reports" ? "600" : "400",
-            color: activeTab === "reports" ? "#ff6b6b" : "#4a5568",
-            borderBottom: activeTab === "reports" ? "2px solid #ff6b6b" : "none",
+            fontWeight: activeTab === "post_reports" ? "600" : "400",
+            color: activeTab === "post_reports" ? "#ff6b6b" : "#4a5568",
+            borderBottom: activeTab === "post_reports" ? "2px solid #ff6b6b" : "none",
             background: "none",
             cursor: "pointer",
           }}
         >
-          举报审核 ({reports.length})
+          帖子审核 ({postReports.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("comment_ai_review")}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            fontWeight: activeTab === "comment_ai_review" ? "600" : "400",
+            color: activeTab === "comment_ai_review" ? "#ff6b6b" : "#4a5568",
+            borderBottom: activeTab === "comment_ai_review" ? "2px solid #ff6b6b" : "none",
+            background: "none",
+            cursor: "pointer",
+          }}
+        >
+          评论人工复核 ({pendingComments.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("comment_reports")}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            fontWeight: activeTab === "comment_reports" ? "600" : "400",
+            color: activeTab === "comment_reports" ? "#ff6b6b" : "#4a5568",
+            borderBottom: activeTab === "comment_reports" ? "2px solid #ff6b6b" : "none",
+            background: "none",
+            cursor: "pointer",
+          }}
+        >
+          评论审核 ({commentReports.length})
         </button>
       </div>
 
@@ -312,13 +360,77 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* AI 评论复核列表 */}
+      {activeTab === "comment_ai_review" && (
+        <div className="admin-comments-list">
+          {pendingComments.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px", color: "#a0aec0" }}>暂无待复核的评论</div>
+          ) : (
+            pendingComments.map((comment) => (
+              <div
+                key={comment.id}
+                style={{
+                  background: "white",
+                  borderRadius: "16px",
+                  padding: "20px",
+                  marginBottom: "16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  border: "1px solid #edf2f7",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "12px", marginBottom: "10px" }}>
+                  <strong>评论 #{comment.id}</strong>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {aiReviewBadge(comment.ai_review)}
+                    <span style={{ background: "#fed7d7", color: "#c53030", padding: "4px 8px", borderRadius: "20px", fontSize: "12px" }}>
+                      {comment.status}
+                    </span>
+                  </div>
+                </div>
+                <p style={{ color: "#4a5568", marginBottom: "12px" }}>{comment.content}</p>
+                {comment.ai_review?.reason && (
+                  <p style={{ color: "#718096", fontSize: "13px", marginBottom: "12px" }}>
+                    AI 审核：{comment.ai_review.reason}
+                  </p>
+                )}
+                <div style={{ fontSize: "13px", color: "#718096", marginBottom: "16px" }}>
+                  作者：{comment.nickname || comment.user_id} · 所属帖子：{comment.post_title || comment.post_id} · 创建时间：{comment.created_at}
+                </div>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  <Link
+                    to={`/post/${comment.post_id}`}
+                    style={{ background: "#edf2f7", color: "#2d3748", textDecoration: "none", padding: "8px 20px", borderRadius: "30px", fontSize: "14px" }}
+                  >
+                    查看评论所在帖子
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleCommentReview(comment, "approve")}
+                    style={{ border: "none", background: "#48bb78", color: "white", padding: "8px 20px", borderRadius: "30px", cursor: "pointer", fontSize: "14px" }}
+                  >
+                    通过
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCommentReview(comment, "reject")}
+                    style={{ border: "none", background: "#f56565", color: "white", padding: "8px 20px", borderRadius: "30px", cursor: "pointer", fontSize: "14px" }}
+                  >
+                    不通过
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {/* 举报审核列表 */}
-      {activeTab === "reports" && (
+      {["post_reports", "comment_reports"].includes(activeTab) && (
         <div className="admin-reports-list">
-          {reports.length === 0 ? (
+          {(activeTab === "post_reports" ? postReports : commentReports).length === 0 ? (
             <div style={{ textAlign: "center", padding: "48px", color: "#a0aec0" }}>🎉 暂无待处理的举报</div>
           ) : (
-            reports.map((report) => (
+            (activeTab === "post_reports" ? postReports : commentReports).map((report) => (
               <div
                 key={report.id}
                 style={{
@@ -339,6 +451,11 @@ const AdminDashboard = () => {
                 <p>
                   <strong>被举报内容：</strong> {report.target_title || "内容不存在或已删除"}
                 </p>
+                {report.target_type === "COMMENT" && (
+                  <p>
+                    <strong>评论所在帖子：</strong> {report.target_post_title || report.target_post_id || "未知"}
+                  </p>
+                )}
                 <p>
                   <strong>举报原因：</strong> {reportReasonLabels[report.reason_type] || report.reason_type}
                 </p>
@@ -361,7 +478,7 @@ const AdminDashboard = () => {
                       fontSize: "14px",
                     }}
                   >
-                    查看被举报帖子
+                    {report.target_type === "COMMENT" ? "查看评论所在帖子" : "查看被举报帖子"}
                   </Link>
                 </div>
               </div>

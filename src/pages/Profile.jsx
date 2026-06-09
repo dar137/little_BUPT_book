@@ -3,10 +3,10 @@ import { useNavigate, Link } from "react-router-dom";
 import { 
   FaUser, FaEdit, FaHeart, FaBookmark, FaHistory, 
   FaSignOutAlt, FaCamera, FaComment,
-  FaEnvelope, FaIdCard, FaSpinner, FaTrash
+  FaEnvelope, FaIdCard, FaSpinner, FaTrash, FaFlag
 } from "react-icons/fa";
 import { useAuth } from '../context/AuthContext';
-import { postAPI, resolveAssetUrl, userAPI } from '../api';
+import { postAPI, reportAPI, resolveAssetUrl, userAPI } from '../api';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -28,6 +28,8 @@ const Profile = () => {
   const [tabLoading, setTabLoading] = useState(false);
   const [tabError, setTabError] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -223,12 +225,13 @@ const Profile = () => {
   ];
   const isPostTakenDown = (post) => post?.status === "TAKEN_DOWN";
   const isPostRejected = (post) => post?.status === "REJECTED";
+  const isPostPending = (post) => post?.status === "PENDING_REVIEW";
   const postTitle = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.title;
   const postSummary = (post) => isPostTakenDown(post) ? "该帖子已下架" : post.summary;
   const aiReviewLabel = (post) => ({
     PASS: { text: "AI 合规", color: "#389e0d", background: "#f6ffed", border: "#b7eb8f" },
-    NEED_HUMAN: { text: "AI 可疑", color: "#d48806", background: "#fffbe6", border: "#ffe58f" },
-    REJECT: { text: "AI 不合规", color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
+    NEED_HUMAN: { text: isPostPending(post) ? "审核中" : "AI 可疑", color: "#d48806", background: "#fffbe6", border: "#ffe58f" },
+    REJECT: { text: "AI审核不合规", color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
   }[post?.aiReview?.result]);
 
   const handleDeleteMyPost = async (postId) => {
@@ -254,6 +257,44 @@ const Profile = () => {
     }
   };
 
+  const handleEditMyComment = async (comment) => {
+    const postId = comment.post?.id;
+    if (!postId || !editingCommentContent.trim()) return;
+
+    try {
+      const result = await postAPI.updateComment(postId, comment.id, { content: editingCommentContent.trim() });
+      setMyComments(prev => prev.map(item => (
+        item.id === comment.id
+          ? { ...item, content: editingCommentContent.trim(), status: result.status, aiReview: result.aiReview }
+          : item
+      )));
+      setEditingCommentId(null);
+      setEditingCommentContent('');
+    } catch (err) {
+      alert("编辑失败：" + (err.message || "请稍后重试"));
+    }
+  };
+
+  const handleReportComment = async (comment) => {
+    if (comment.status !== "PUBLISHED") {
+      alert("仅已发布评论可举报");
+      return;
+    }
+    if (!window.confirm("是否举报该评论")) return;
+
+    try {
+      await reportAPI.submit({
+        targetType: "COMMENT",
+        targetId: comment.id,
+        reasonType: "OTHER",
+        reasonDetail: "个人主页评论举报",
+      });
+      alert("举报已提交，我们会尽快处理");
+    } catch (err) {
+      alert("举报失败：" + (err.message || "请稍后重试"));
+    }
+  };
+
   const handleEditRejectedPost = (post) => {
     sessionStorage.setItem('retryPostDraft', JSON.stringify({
       title: post.title || '',
@@ -263,18 +304,36 @@ const Profile = () => {
     }));
     navigate('/create?retry=1');
   };
+  const commentStatusLabel = (comment) => {
+    if (comment.status === "PENDING_REVIEW") return "审核中";
+    if (comment.status === "REJECTED") return "人工复审不通过";
+    return "";
+  };
 
-  const renderListPost = (post, extra = null) => (
-    <div key={`${post.id}-${extra || ""}`} style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-      <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-        <h4>{postTitle(post)}</h4>
-        <p>作者：{post.author?.nickname || post.author || '匿名用户'}</p>
-      </Link>
-      <div style={{ color: '#999', fontSize: '12px', marginTop: '8px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        {extra && <span>{extra}</span>}
-        <span>{post.createdAt}</span>
-        <span>❤️ {post.likesCount || 0}</span>
-        <span>⭐ {post.collectsCount || 0}</span>
+  const renderListPost = (post, extra = null, actions = null) => (
+    <div key={`${post.id}-${extra || ""}`} style={{ background: 'white', borderRadius: '12px', padding: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+      {post.coverImage ? (
+        <img src={post.coverImage} alt={post.title} style={{ width: '88px', height: '88px', borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }} />
+      ) : (
+        <div style={{ width: '88px', height: '88px', borderRadius: '8px', background: '#f7fafc', color: '#cbd5e0', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>图片</div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <h4 style={{ margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{postTitle(post)}</h4>
+          {postSummary(post) && <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '13px' }}>{postSummary(post)}</p>}
+        </Link>
+        <div style={{ color: '#999', fontSize: '12px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {extra && <span>{extra}</span>}
+          <span>{post.createdAt}</span>
+          <span>❤️ {post.likesCount || 0}</span>
+          <span>⭐ {post.collectsCount || 0}</span>
+        </div>
+        {aiReviewLabel(post) && (
+          <span style={{ display: 'inline-block', marginTop: '8px', padding: '3px 8px', borderRadius: '12px', fontSize: '12px', color: aiReviewLabel(post).color, background: aiReviewLabel(post).background, border: `1px solid ${aiReviewLabel(post).border}` }}>
+            {aiReviewLabel(post).text}
+          </span>
+        )}
+        {actions && <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>{actions}</div>}
       </div>
     </div>
   );
@@ -367,44 +426,25 @@ const Profile = () => {
         {tabError && <div style={{ textAlign: 'center', padding: '16px', color: '#f56565' }}>{tabError}</div>}
 
         {activeTab === "posts" && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {myPosts.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>暂无发帖</div> :
               myPosts.map(post => (
-                <div key={post.id} style={{ position: 'relative' }}>
-                  <Link to={`/post/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'transform 0.2s' }}>
-                      {post.coverImage && <img src={post.coverImage} alt={post.title} style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover' }} />}
-                      <div style={{ padding: '12px', paddingBottom: (isPostTakenDown(post) || isPostRejected(post)) ? '78px' : '36px' }}>
-                        <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</h4>
-                        {post.summary && <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '13px' }}>{post.summary}</p>}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#999' }}><span>{post.category}</span><span>{post.createdAt}</span></div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '10px', fontSize: '12px', color: '#666' }}><span>❤️ {post.likesCount || 0}</span><span>💬 {post.commentsCount || 0}</span></div>
-                        {aiReviewLabel(post) && (
-                          <div style={{ display: 'inline-block', marginTop: '10px', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', color: aiReviewLabel(post).color, background: aiReviewLabel(post).background, border: `1px solid ${aiReviewLabel(post).border}` }}>
-                            {aiReviewLabel(post).text}
-                          </div>
-                        )}
-                        {isPostTakenDown(post) && (
-                          <div style={{ marginTop: '10px', padding: '8px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '8px', color: '#ad6800', fontSize: '13px' }}>
-                            该帖子已被封禁
-                          </div>
-                        )}
-                        {isPostRejected(post) && (
-                          <div style={{ marginTop: '10px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '13px' }}>
-                            已打回：{post.aiReview?.reason || '内容未通过审核'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
+                renderListPost(post, post.category, (
+                  <>
+                  {isPostTakenDown(post) && (
+                    <span style={{ padding: '5px 10px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '14px', color: '#ad6800', fontSize: '12px' }}>
+                      该帖子已被封禁
+                    </span>
+                  )}
                   {isPostRejected(post) && (
+                    <>
+                    <span style={{ padding: '5px 10px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '14px', color: '#cf1322', fontSize: '12px' }}>
+                      已打回：{post.aiReview?.reason || '内容未通过审核'}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleEditRejectedPost(post)}
                       style={{
-                        position: 'absolute',
-                        left: '12px',
-                        bottom: '12px',
                         border: '1px solid #91caff',
                         background: '#e6f4ff',
                         color: '#1677ff',
@@ -417,15 +457,13 @@ const Profile = () => {
                     >
                       重新编辑
                     </button>
+                    </>
                   )}
                   <button
                     type="button"
                     onClick={() => handleDeleteMyPost(post.id)}
                     title="删除帖子"
                     style={{
-                      position: 'absolute',
-                      right: '12px',
-                      bottom: '12px',
                       width: '30px',
                       height: '30px',
                       borderRadius: '50%',
@@ -440,7 +478,8 @@ const Profile = () => {
                   >
                     <FaTrash size={13} />
                   </button>
-                </div>
+                  </>
+                ))
               ))
             }
           </div>
@@ -480,14 +519,55 @@ const Profile = () => {
             {myComments.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>暂无评论</div> :
               myComments.map(comment => (
                 <div key={comment.id} style={{ background: 'white', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                  {comment.post?.coverImage ? (
+                    <img
+                      src={comment.post.coverImage}
+                      alt={comment.post.title}
+                      style={{ width: '76px', height: '76px', borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
+                    />
+                  ) : (
+                    <div style={{ width: '76px', height: '76px', borderRadius: '8px', background: '#f7fafc', color: '#cbd5e0', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>图片</div>
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: '0 0 6px 0', color: '#4a5568', fontSize: '14px' }}>{comment.content}</p>
+                    {editingCommentId === comment.id ? (
+                      <div style={{ marginBottom: '8px' }}>
+                        <textarea
+                          value={editingCommentContent}
+                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                          rows="2"
+                          style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '6px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button onClick={() => setEditingCommentId(null)} style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid #ddd', backgroundColor: '#f5f5f5', fontSize: '12px', cursor: 'pointer' }}>取消</button>
+                          <button onClick={() => handleEditMyComment(comment)} style={{ padding: '4px 12px', borderRadius: '4px', border: 'none', backgroundColor: '#1890ff', color: 'white', fontSize: '12px', cursor: 'pointer' }}>保存</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ margin: '0 0 6px 0', color: '#4a5568', fontSize: '14px' }}>{comment.content}</p>
+                    )}
+                    {commentStatusLabel(comment) && (
+                      <div style={{ display: 'inline-block', marginBottom: '6px', padding: '3px 8px', borderRadius: '12px', background: comment.status === 'REJECTED' ? '#fff1f0' : '#fffbe6', color: comment.status === 'REJECTED' ? '#cf1322' : '#d48806', border: `1px solid ${comment.status === 'REJECTED' ? '#ffa39e' : '#ffe58f'}`, fontSize: '12px' }}>
+                        {commentStatusLabel(comment)}{comment.aiReview?.reason ? `：${comment.aiReview.reason}` : ''}
+                      </div>
+                    )}
                     <Link to={`/post/${comment.post?.id}`} style={{ textDecoration: 'none', color: '#718096', fontSize: '12px' }}>
                       被评论帖子：{postTitle(comment.post)}
                     </Link>
                     <div style={{ color: '#999', fontSize: '12px', display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' }}>
                       <span>{comment.createdAt}</span>
                       <span>状态：{comment.status}</span>
+                      {["PENDING_REVIEW", "REJECTED"].includes(comment.status) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCommentId(comment.id);
+                            setEditingCommentContent(comment.content || '');
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: '#1677ff', cursor: 'pointer', padding: 0, fontSize: '12px' }}
+                        >
+                          编辑
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleDeleteMyComment(comment)}
@@ -496,14 +576,16 @@ const Profile = () => {
                         删除
                       </button>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleReportComment(comment)}
+                        style={{ border: 'none', background: 'transparent', color: '#b7791f', cursor: 'pointer', padding: 0, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <FaFlag size={11} /> 举报
+                      </button>
+                    </div>
                   </div>
-                  {comment.post?.coverImage && (
-                    <img
-                      src={comment.post.coverImage}
-                      alt={comment.post.title}
-                      style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
-                    />
-                  )}
                 </div>
               ))
             }

@@ -30,10 +30,22 @@ def create_report(current_user):
     if not reason_type:
         return fail("举报原因类型不能为空", code=400, status_code=400)
 
+    if reason_type not in ["PORN", "SPAM", "AD", "ABUSE", "FALSE_INFO", "ILLEGAL", "OTHER"]:
+        return fail("举报原因类型错误", code=400, status_code=400)
+
     if target_type == "POST":
-        target = Post.query.filter_by(id=target_id).first()
+        target = Post.query.filter_by(id=target_id, status="PUBLISHED").first()
     else:
-        target = Comment.query.filter_by(id=target_id).first()
+        target = (
+            Comment.query
+            .join(Post, Comment.post_id == Post.id)
+            .filter(
+                Comment.id == target_id,
+                Comment.status == "PUBLISHED",
+                Post.status == "PUBLISHED"
+            )
+            .first()
+        )
 
     if not target:
         return fail("资源不存在", code=404, status_code=404)
