@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { postAPI, reportAPI } from '../api';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { adminAPI, postAPI, reportAPI, resolveAssetUrl } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 function PostDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
+  const reportId = searchParams.get('reportId');
+  const isPostReview = currentUser?.role === 'ADMIN' && searchParams.get('adminReview') === 'post';
+  const isAdminReview = currentUser?.role === 'ADMIN' && reportId;
 
   // ===== 帖子数据状态 =====
   const [post, setPost] = useState(null);
@@ -28,6 +33,8 @@ function PostDetail() {
   const [reportReason, setReportReason] = useState('');
   const [reportDetail, setReportDetail] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [handlingAdminReport, setHandlingAdminReport] = useState(false);
+  const [handlingPostReview, setHandlingPostReview] = useState(false);
 
   // 举报原因映射（前端显示用中文，发送给后端用英文）
   const reportReasons = [
@@ -44,7 +51,8 @@ function PostDetail() {
     setLoading(true);
     setError(null);
     try {
-      const result = await postAPI.getDetail(id);
+      const detailId = isPostReview ? `${id}?adminReview=post` : id;
+      const result = await postAPI.getDetail(detailId);
       setPost(result);
     } catch (err) {
       console.error('获取帖子详情失败:', err);
@@ -56,7 +64,7 @@ function PostDetail() {
 
   useEffect(() => {
     fetchPostDetail();
-  }, [id]);
+  }, [id, isPostReview]);
 
   // ===== 处理点赞 =====
   const handleLike = async () => {
@@ -163,12 +171,81 @@ function PostDetail() {
       });
       alert('举报已提交，我们会尽快处理');
       setShowReportModal(false);
+      navigate('/');
     } catch (err) {
       alert('举报失败：' + (err.message || '请稍后重试'));
     } finally {
       setSubmittingReport(false);
     }
   };
+
+  const handleAdminReport = async (action) => {
+    if (!isAdminReview || handlingAdminReport) return;
+
+    setHandlingAdminReport(true);
+    try {
+      if (action === 'confirm') {
+        await adminAPI.confirmReport(reportId);
+        alert(`举报 ${reportId} 已确认，相关内容已下架/用户已处理`);
+      } else {
+        await adminAPI.rejectReport(reportId);
+        alert(`举报 ${reportId} 已驳回（不违规）`);
+      }
+      navigate('/admin');
+    } catch (err) {
+      alert(err.message || '处理举报失败');
+    } finally {
+      setHandlingAdminReport(false);
+    }
+  };
+
+  const handlePostReview = async (action) => {
+    if (!isPostReview || handlingPostReview) return;
+
+    setHandlingPostReview(true);
+    try {
+      if (action === 'approve') {
+        await adminAPI.approvePost(post.id);
+        alert(`帖子 ${post.id} 已通过，将正常发布`);
+      } else {
+        await adminAPI.deletePost(post.id);
+        alert(`帖子 ${post.id} 已删除`);
+      }
+      navigate('/admin');
+    } catch (err) {
+      alert(err.message || '复核处理失败');
+    } finally {
+      setHandlingPostReview(false);
+    }
+  };
+
+  const handleDeletePost = async () => {
+    if (!currentUser || currentUser.role !== 'ADMIN') return;
+    if (!window.confirm('是否确认删除该帖子')) return;
+
+    try {
+      await adminAPI.deletePost(post.id);
+      alert('帖子已删除');
+      navigate('/admin');
+    } catch (err) {
+      alert('删除帖子失败：' + (err.message || '请稍后重试'));
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('是否确认删除该评论')) return;
+
+    try {
+      await postAPI.deleteComment(post.id, commentId);
+      await fetchPostDetail();
+    } catch (err) {
+      alert('删除评论失败：' + (err.message || '请稍后重试'));
+    }
+  };
+
+  const canDeleteComment = (comment) => (
+    currentUser?.role === 'ADMIN' || currentUser?.id === comment.author?.id
+  );
 
   // ===== 加载状态 =====
   if (loading) {
@@ -192,6 +269,30 @@ function PostDetail() {
 
   const images = post.images || [];
   const postComments = post.comments || [];
+  const renderAvatar = (author, size = 28) => (
+    author?.avatar ? (
+      <img
+        src={resolveAssetUrl(author.avatar)}
+        alt={author.nickname || '用户头像'}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: '0 0 auto' }}
+      />
+    ) : (
+      <div style={{
+        width: size, height: size, borderRadius: '50%', backgroundColor: '#e6f7ff',
+        color: '#1890ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: Math.max(12, size - 14), flex: '0 0 auto'
+      }}>
+        👤
+      </div>
+    )
+  );
+  const renderAdminBadge = (author) => (
+    author?.role === 'ADMIN' ? (
+      <span style={{ background: '#f0fff4', border: '1px solid #9ae6b4', color: '#2f855a', borderRadius: '10px', padding: '1px 6px', fontSize: '11px', fontWeight: '600' }}>
+        管理员
+      </span>
+    ) : null
+  );
 
   return (
     <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto', minHeight: '150vh' }}>
@@ -264,7 +365,7 @@ function PostDetail() {
         >
           {post.author?.avatar ? (
             <img
-              src={post.author.avatar}
+              src={resolveAssetUrl(post.author.avatar)}
               alt={post.author.nickname}
               style={{
                 width: '32px', height: '32px', borderRadius: '50%',
@@ -284,6 +385,11 @@ function PostDetail() {
           <span style={{ fontSize: '15px', fontWeight: '500', color: '#333' }}>
             {post.author?.nickname || '匿名用户'}
           </span>
+          {post.author?.role === 'ADMIN' && (
+            <span style={{ background: '#f0fff4', border: '1px solid #9ae6b4', color: '#2f855a', borderRadius: '10px', padding: '1px 6px', fontSize: '11px', fontWeight: '600' }}>
+              管理员
+            </span>
+          )}
         </Link>
 
         {/* 标题 */}
@@ -310,6 +416,12 @@ function PostDetail() {
         <p style={{ fontSize: '16px', lineHeight: '1.6', color: '#333', margin: '0 0 15px 0', wordBreak: 'break-word' }}>
           {post.content}
         </p>
+
+        {post.category === '二手交易' && post.estimatedPrice && (
+          <div style={{ color: '#b7791f', fontSize: '18px', fontWeight: '700', marginBottom: '15px' }}>
+            ￥{post.estimatedPrice}
+          </div>
+        )}
 
         {/* 发帖时间 */}
         <div style={{ textAlign: 'right', color: '#999', fontSize: '12px', marginBottom: '15px' }}>
@@ -355,8 +467,115 @@ function PostDetail() {
             <span style={{ fontSize: '16px' }}>🚩</span>
             <span>举报</span>
           </button>
+
+          {currentUser?.role === 'ADMIN' && (
+            <button onClick={handleDeletePost} style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#e53e3e', fontSize: '14px',
+              padding: '4px 8px', borderRadius: '8px'
+            }}>
+              🗑 删除帖子
+            </button>
+          )}
         </div>
       </div>
+
+      {isPostReview && (
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          border: '1px solid #eee',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#333' }}>AI 发帖复核处理</h3>
+          <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+            已查看待复核帖子，可在此选择通过或不通过。
+          </p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => handlePostReview('approve')}
+              disabled={handlingPostReview}
+              style={{
+                background: handlingPostReview ? '#9ae6b4' : '#48bb78',
+                color: 'white',
+                border: 'none',
+                padding: '8px 20px',
+                borderRadius: '30px',
+                cursor: handlingPostReview ? 'not-allowed' : 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              通过
+            </button>
+            <button
+              onClick={() => handlePostReview('reject')}
+              disabled={handlingPostReview}
+              style={{
+                background: handlingPostReview ? '#feb2b2' : '#f56565',
+                color: 'white',
+                border: 'none',
+                padding: '8px 20px',
+                borderRadius: '30px',
+                cursor: handlingPostReview ? 'not-allowed' : 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              不通过
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isAdminReview && (
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          border: '1px solid #eee',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#333' }}>举报审核处理</h3>
+          <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+            已查看被举报帖子，可在此处理举报 #{reportId}。
+          </p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => handleAdminReport('confirm')}
+              disabled={handlingAdminReport}
+              style={{
+                background: handlingAdminReport ? '#9ae6b4' : '#48bb78',
+                color: 'white',
+                border: 'none',
+                padding: '8px 20px',
+                borderRadius: '30px',
+                cursor: handlingAdminReport ? 'not-allowed' : 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              确认违规（下架）
+            </button>
+            <button
+              onClick={() => handleAdminReport('reject')}
+              disabled={handlingAdminReport}
+              style={{
+                background: handlingAdminReport ? '#feb2b2' : '#f56565',
+                color: 'white',
+                border: 'none',
+                padding: '8px 20px',
+                borderRadius: '30px',
+                cursor: handlingAdminReport ? 'not-allowed' : 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              驳回举报
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ==================== 评论区卡片 ==================== */}
       <div style={{
@@ -374,16 +593,40 @@ function PostDetail() {
               borderBottom: '1px solid #f0f0f0',
               position: 'relative'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
-                  {comment.author?.nickname || '匿名用户'}
-                </span>
-                <span style={{ color: '#999', fontSize: '12px' }}>{comment.createdAt}</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '6px' }}>
+                {renderAvatar(comment.author)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                        {comment.author?.nickname || '匿名用户'}
+                      </span>
+                      {renderAdminBadge(comment.author)}
+                    </span>
+                    <span style={{ color: '#999', fontSize: '12px' }}>{comment.createdAt}</span>
+                  </div>
+                </div>
               </div>
-              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555' }}>{comment.content}</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#555', textAlign: 'left' }}>{comment.content}</p>
 
               {replyingTo !== comment.id ? (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                  {canDeleteComment(comment) && (
+                    <button
+                      onClick={() => handleDeleteComment(comment.id)}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        border: '1px solid #fed7d7',
+                        backgroundColor: '#fff5f5',
+                        color: '#e53e3e',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      删除
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setReplyingTo(comment.id);
@@ -450,6 +693,49 @@ function PostDetail() {
                       回复
                     </button>
                   </div>
+                </div>
+              )}
+
+              {comment.replies?.length > 0 && (
+                <div style={{ margin: '8px 0 8px 16px', paddingLeft: '12px', borderLeft: '2px solid #f0f0f0' }}>
+                  {comment.replies.map((reply, index) => (
+                    <div key={reply.id} style={{ marginBottom: '8px', position: 'relative', paddingBottom: '16px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '4px' }}>
+                        {renderAvatar(reply.author, 24)}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                              <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#555' }}>
+                                {reply.author?.nickname || '匿名用户'}
+                              </span>
+                              {renderAdminBadge(reply.author)}
+                            </span>
+                            <span style={{ color: '#aaa', fontSize: '12px' }}>{reply.createdAt}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#666', textAlign: 'left' }}>{reply.content}</p>
+                      {canDeleteComment(reply) && (
+                        <button
+                          onClick={() => handleDeleteComment(reply.id)}
+                          style={{
+                            position: 'absolute',
+                            right: '38px',
+                            bottom: 0,
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#e53e3e',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            padding: 0
+                          }}
+                        >
+                          删除
+                        </button>
+                      )}
+                      <span style={{ position: 'absolute', right: 0, bottom: 0, color: '#aaa', fontSize: '12px' }}>{index + 1}楼</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

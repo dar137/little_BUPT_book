@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
 import './App.css';
@@ -12,21 +12,8 @@ import Profile from './pages/Profile';
 import Report from './pages/Report';
 import AuthPrompt from './pages/AuthPrompt';
 import UserProfile from './pages/UserProfile';  // ← 新增导入
-
-// 简单的管理后台占位组件（你可以后续完善）
-const AdminDashboard = () => {
-  const { currentUser } = useAuth();
-  if (!currentUser || currentUser.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-  return (
-    <div style={{ padding: '20px', textAlign: 'center' }}>
-      <h2>🛡️ 管理员后台</h2>
-      <p>欢迎，{currentUser.nickname || currentUser.username}</p>
-      <p>这里可以管理帖子、用户和举报</p>
-    </div>
-  );
-};
+import AdminDashboard from './pages/AdminDashboard';
+import NotFound from './pages/NotFound';
 
 // 导航栏组件
 const Navbar = () => {
@@ -42,6 +29,7 @@ const Navbar = () => {
   };
 
   const handleLogout = () => {
+    if (!window.confirm('是否确认退出登录')) return;
     logout();
     navigate('/');
   };
@@ -70,7 +58,7 @@ const Navbar = () => {
 
           {currentUser ? (
             <>
-              {currentUser.role === 'admin' && (
+              {currentUser.role === 'ADMIN' && (
                 <Link to="/admin" className="nav-item admin-nav-item">
                   <FaShieldAlt className="nav-icon" />
                   <span>管理</span>
@@ -115,6 +103,7 @@ function App() {
           <Route path="/auth-prompt" element={<AuthPrompt />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/user/:userId" element={<UserProfile />} />   {/* ← 新增路由 */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </BrowserRouter>

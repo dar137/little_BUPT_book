@@ -1,11 +1,17 @@
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+import os
+
+from flask import Blueprint, current_app, request, send_from_directory
 
 from app.extensions import db
 from app.middlewares.admin_required import admin_required
+from app.models.comment import Comment
 from app.models.post import Post
 from app.models.report import Report
+from app.models.user import User
+from app.services.moderation_service import hide_post, mark_comment_deleted, recalculate_post_counts
+from app.utils.response import success, fail
 
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -48,12 +54,25 @@ def serialize_post(post):
 
 
 def serialize_report(report):
+    target_title = None
+    target_post_id = None
+    if report.target_type == "POST":
+        post = Post.query.get(report.target_id)
+        target_title = post.title if post else None
+        target_post_id = post.id if post else None
+    elif report.target_type == "COMMENT":
+        comment = Comment.query.get(report.target_id)
+        target_title = comment.post.title if comment and comment.post else None
+        target_post_id = comment.post_id if comment else None
+
     return {
         "id": report.id,
         "reporter_id": report.reporter_id,
         "reporter_nickname": report.reporter.nickname if report.reporter else None,
         "target_type": report.target_type,
         "target_id": report.target_id,
+        "target_title": target_title,
+        "target_post_id": target_post_id,
         "reason_type": report.reason_type,
         "reason_detail": report.reason_detail,
         "status": report.status,
@@ -63,6 +82,20 @@ def serialize_report(report):
         "handled_at": format_datetime(report.handled_at),
         "created_at": format_datetime(report.created_at),
         "updated_at": format_datetime(report.updated_at)
+    }
+
+
+def serialize_registration(user):
+    return {
+        "id": user.id,
+        "username": user.student_no,
+        "nickname": user.nickname,
+        "email": user.email,
+        "student_card_url": user.student_card_url,
+        "review_status": user.review_status,
+        "review_reject_reason": user.review_reject_reason,
+        "created_at": format_datetime(user.created_at),
+        "updated_at": format_datetime(user.updated_at)
     }
 
 
@@ -76,9 +109,9 @@ def get_pending_posts():
         .all()
     )
 
-    return jsonify({
+    return success({
         "list": [serialize_post(post) for post in posts]
-    }), 200
+    })
 
 
 @admin_bp.route("/approve-post/<int:post_id>", methods=["POST"])
@@ -87,23 +120,17 @@ def approve_post(post_id):
     post = Post.query.get(post_id)
 
     if not post:
-        return jsonify({
-            "message": "帖子不存在"
-        }), 404
+        return fail("帖子不存在", code=404, status_code=404)
 
     if post.status == "DELETED":
-        return jsonify({
-            "message": "帖子已删除，无法审核通过"
-        }), 400
+        return fail("帖子已删除，无法审核通过", code=400, status_code=400)
 
     post.status = "PUBLISHED"
     post.published_at = datetime.utcnow()
 
     db.session.commit()
 
-    return jsonify({
-        "message": "帖子审核通过"
-    }), 200
+    return success(None, message="帖子审核通过")
 
 
 @admin_bp.route("/delete-post/<int:post_id>", methods=["DELETE"])
@@ -112,18 +139,13 @@ def delete_post(post_id):
     post = Post.query.get(post_id)
 
     if not post:
-        return jsonify({
-            "message": "帖子不存在"
-        }), 404
+        return fail("帖子不存在", code=404, status_code=404)
 
-    post.status = "DELETED"
-    post.deleted_at = datetime.utcnow()
+    hide_post(post, "DELETED")
 
     db.session.commit()
 
-    return jsonify({
-        "message": "帖子已删除"
-    }), 200
+    return success(None, message="帖子已删除")
 
 
 @admin_bp.route("/reports", methods=["GET"])
@@ -131,13 +153,14 @@ def delete_post(post_id):
 def get_reports():
     reports = (
         Report.query
+        .filter_by(status="PENDING")
         .order_by(Report.created_at.desc())
         .all()
     )
 
-    return jsonify({
+    return success({
         "list": [serialize_report(report) for report in reports]
-    }), 200
+    })
 
 
 @admin_bp.route("/confirm-report/<int:report_id>", methods=["POST"])
@@ -146,9 +169,7 @@ def confirm_report(report_id):
     report = Report.query.get(report_id)
 
     if not report:
-        return jsonify({
-            "message": "举报不存在"
-        }), 404
+        return fail("举报不存在", code=404, status_code=404)
 
     current_user = request.current_user
 
@@ -160,13 +181,16 @@ def confirm_report(report_id):
     if report.target_type == "POST":
         post = Post.query.get(report.target_id)
         if post and post.status != "DELETED":
-            post.status = "TAKEN_DOWN"
+            hide_post(post, "TAKEN_DOWN")
+    elif report.target_type == "COMMENT":
+        comment = Comment.query.get(report.target_id)
+        if comment and comment.status != "DELETED":
+            mark_comment_deleted(comment, "TAKEN_DOWN")
+            recalculate_post_counts(comment.post)
 
     db.session.commit()
 
-    return jsonify({
-        "message": "举报已确认并处理"
-    }), 200
+    return success(None, message="举报已确认并处理")
 
 
 @admin_bp.route("/reject-report/<int:report_id>", methods=["POST"])
@@ -175,9 +199,7 @@ def reject_report(report_id):
     report = Report.query.get(report_id)
 
     if not report:
-        return jsonify({
-            "message": "举报不存在"
-        }), 404
+        return fail("举报不存在", code=404, status_code=404)
 
     current_user = request.current_user
 
@@ -188,6 +210,65 @@ def reject_report(report_id):
 
     db.session.commit()
 
-    return jsonify({
-        "message": "举报已驳回"
-    }), 200
+    return success(None, message="举报已驳回")
+
+
+@admin_bp.route("/registrations", methods=["GET"])
+@admin_required
+def get_pending_registrations():
+    users = (
+        User.query
+        .filter_by(review_status="PENDING")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+    return success({
+        "list": [serialize_registration(user) for user in users]
+    })
+
+
+@admin_bp.route("/registration-card/<path:filename>", methods=["GET"])
+@admin_required
+def get_registration_card(filename):
+    upload_root = os.path.join(current_app.root_path, "..", "uploads", "student_cards")
+    return send_from_directory(upload_root, filename)
+
+
+@admin_bp.route("/registrations/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def approve_registration(user_id):
+    user = User.query.get(user_id)
+
+    if not user:
+        return fail("注册申请不存在", code=404, status_code=404)
+
+    if user.review_status != "PENDING":
+        return fail("该申请已处理", code=400, status_code=400)
+
+    user.review_status = "APPROVED"
+    user.status = "NORMAL"
+    user.review_reject_reason = None
+    db.session.commit()
+
+    return success(None, message="注册申请已通过")
+
+
+@admin_bp.route("/registrations/<int:user_id>/reject", methods=["POST"])
+@admin_required
+def reject_registration(user_id):
+    user = User.query.get(user_id)
+
+    if not user:
+        return fail("注册申请不存在", code=404, status_code=404)
+
+    if user.review_status != "PENDING":
+        return fail("该申请已处理", code=400, status_code=400)
+
+    user.review_status = "REJECTED"
+    user.status = "DELETED"
+    user.review_reject_reason = "图片无法验证身份"
+    user.deleted_at = datetime.utcnow()
+    db.session.commit()
+
+    return success(None, message="注册申请已否决")

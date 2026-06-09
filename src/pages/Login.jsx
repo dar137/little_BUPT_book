@@ -16,41 +16,20 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    // ========== 新增：管理员登录分支 ==========
-    // 使用管理员用户名（例如 admin）和密码（例如 admin）登录
-    if (studentId === "admin" && password === "admin") {
+    try {
       const result = await login(studentId, password);
       if (result.success) {
-        window.dispatchEvent(new Event('authChange')); // 触发导航栏更新
-        navigate("/admin");                           // 跳转到管理后台
+        window.dispatchEvent(new Event('authChange'));
+        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+        navigate(userInfo.role === "ADMIN" ? "/admin" : "/");
       } else {
         setError(result.message);
       }
+    } catch (err) {
+      setError(err.message || "登录失败，请稍后重试");
+    } finally {
       setLoading(false);
-      return;
     }
-    // ========== 原有普通用户登录逻辑（完全保留） ==========
-    setTimeout(() => {
-      if (studentId === "20240001" && password === "123456") {
-        // 保存用户信息，并增加 role 字段（用于区分身份）
-        const userInfo = {
-          id: 1,
-          studentId: studentId,
-          name: "刘宇欣",
-          email: "liuyuxin@bupt.edu.cn",
-          bio: "热爱编程的前端开发者",
-          role: "user",        // 新增：标明普通用户角色
-        };
-        localStorage.setItem("token", "fake-token-123");
-        localStorage.setItem("userInfo", JSON.stringify(userInfo));
-        
-        window.dispatchEvent(new Event('authChange'));
-        navigate("/");
-      } else {
-        setError("学号或密码错误（演示用：20240001 / 123456）");
-      }
-      setLoading(false);
-    }, 500);
   };
 
   return (

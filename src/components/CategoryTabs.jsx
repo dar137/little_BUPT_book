@@ -1,7 +1,4 @@
-function CategoryTabs({ activeTag, onTagChange }) {
-  // 定义所有可用的标签
-  const tags = ['全部', '失物招领', '学习交流', '组队', '其他'];
-
+function CategoryTabs({ tags = ['全部'], activeTag, onTagChange }) {
   return (
     <div style={{ marginBottom: '15px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
       {tags.map(tag => (

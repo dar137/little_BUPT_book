@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { postAPI } from '../api';
+import { categoryAPI, postAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 // 图片上传接口的基础路径（与 api.js 中的 BASE_URL 保持一致）
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
+const MAX_IMAGES = 9;
 
 function CreatePost() {
   const { currentUser } = useAuth();
@@ -14,77 +16,109 @@ function CreatePost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');           // 分类
-  const [imageFile, setImageFile] = useState(null);       // 用户选择的文件对象
-  const [imagePreview, setImagePreview] = useState('');   // 本地预览链接
-  const [uploadedUrl, setUploadedUrl] = useState('');     // 上传后服务器返回的 URL
+  const [estimatedPrice, setEstimatedPrice] = useState('');
+  const [imageFiles, setImageFiles] = useState([]);       // 用户选择的文件对象
+  const [imagePreviews, setImagePreviews] = useState([]); // 本地预览链接
+  const [uploadedUrls, setUploadedUrls] = useState([]);   // 上传后服务器返回的 URL
   const [uploading, setUploading] = useState(false);      // 上传中状态
   const [submitting, setSubmitting] = useState(false);    // 提交中状态
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoryError, setCategoryError] = useState('');
 
-  // 可选分类列表
-  const categories = ['失物招领', '学习交流', '组队', '其他'];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setCategoriesLoading(true);
+      setCategoryError('');
+      try {
+        const result = await categoryAPI.getList();
+        setCategories(result.list || []);
+      } catch (err) {
+        setCategoryError(err.message || '分类加载失败');
+        setCategories([]);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   // 处理从电脑选择图片
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    // 限制文件大小 5MB
-    if (file.size > 5 * 1024 * 1024) {
-      alert('图片大小不能超过 5MB');
+    if (imageFiles.length + selectedFiles.length > MAX_IMAGES) {
+      alert(`最多选择 ${MAX_IMAGES} 张图片`);
+      e.target.value = '';
       return;
     }
 
-    // 释放之前的预览链接
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
+    if (selectedFiles.some(file => file.size > 5 * 1024 * 1024)) {
+      alert('图片大小不能超过 5MB');
+      e.target.value = '';
+      return;
     }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setUploadedUrl('');  // 重新选择图片后清除已上传的 URL
+    setImageFiles(prev => [...prev, ...selectedFiles]);
+    setImagePreviews(prev => [...prev, ...selectedFiles.map(file => URL.createObjectURL(file))]);
+    setUploadedUrls([]);  // 重新选择图片后清除已上传的 URL
+    e.target.value = '';
   };
 
   // 清除图片
   const handleClearImage = () => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
-    setImageFile(null);
-    setImagePreview('');
-    setUploadedUrl('');
+    imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    setImageFiles([]);
+    setImagePreviews([]);
+    setUploadedUrls([]);
+  };
+
+  const handleRemoveImage = (index) => {
+    URL.revokeObjectURL(imagePreviews[index]);
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    setUploadedUrls([]);
   };
 
   // 上传图片到服务器
-  const uploadImage = async () => {
-    if (!imageFile) return null;  // 没有选择图片，直接返回 null
+  const uploadImages = async () => {
+    if (imageFiles.length === 0) return [];  // 没有选择图片，直接返回空数组
     
     setUploading(true);
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', imageFile);
+      const urls = [];
 
-      const response = await fetch(`${BASE_URL}/upload/post-image`, {
-        method: 'POST',
-        headers: {
-          // 注意：上传文件时不能设置 Content-Type，让浏览器自动处理
-          'Authorization': token ? `Bearer ${token}` : ''
-        },
-        body: formData,
-      });
+      for (const file of imageFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const result = await response.json();
-      
-      if (result.code === 0) {
-        // 拼接完整 URL（如果后端返回的是相对路径）
-        const fullUrl = result.data.url.startsWith('http') 
-          ? result.data.url 
-          : `http://localhost:5000${result.data.url}`;
-        setUploadedUrl(fullUrl);
-        return fullUrl;
-      } else {
-        throw new Error(result.message || '上传失败');
+        const response = await fetch(`${BASE_URL}/upload/post-image`, {
+          method: 'POST',
+          headers: {
+            // 注意：上传文件时不能设置 Content-Type，让浏览器自动处理
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          body: formData,
+        });
+
+        const result = await response.json();
+        
+        if (result.code === 0) {
+          // 拼接完整 URL（如果后端返回的是相对路径）
+          const fullUrl = result.data.url.startsWith('http') 
+            ? result.data.url 
+            : `${API_ORIGIN}${result.data.url}`;
+          urls.push(fullUrl);
+        } else {
+          throw new Error(result.message || '上传失败');
+        }
       }
+
+      setUploadedUrls(urls);
+      return urls;
     } catch (err) {
       alert('图片上传失败：' + (err.message || '请稍后重试'));
       return null;
@@ -117,14 +151,18 @@ function CreatePost() {
       alert('请输入内容');
       return;
     }
+    if (category === '二手交易' && !estimatedPrice.trim()) {
+      alert('请输入预估价格');
+      return;
+    }
 
     setSubmitting(true);
     try {
       // 1. 如果有图片且未上传，先上传图片
-      let imageUrl = uploadedUrl;
-      if (imageFile && !uploadedUrl) {
-        imageUrl = await uploadImage();
-        if (!imageUrl) {
+      let imageUrls = uploadedUrls;
+      if (imageFiles.length > 0 && uploadedUrls.length === 0) {
+        imageUrls = await uploadImages();
+        if (!imageUrls) {
           setSubmitting(false);
           return;  // 上传失败，中止提交
         }
@@ -135,7 +173,8 @@ function CreatePost() {
         title: title.trim(),
         content: content.trim(),
         category: category,
-        images: imageUrl ? [imageUrl] : []
+        estimatedPrice: category === '二手交易' ? estimatedPrice.trim() : undefined,
+        images: imageUrls
       });
 
       alert('帖子发布成功，等待审核');
@@ -144,6 +183,7 @@ function CreatePost() {
       setTitle('');
       setContent('');
       setCategory('');
+      setEstimatedPrice('');
       handleClearImage();
       navigate('/');
     } catch (err) {
@@ -151,15 +191,6 @@ function CreatePost() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // 手动上传图片（在预览区提供上传按钮）
-  const handleManualUpload = async () => {
-    if (!imageFile) {
-      alert('请先选择图片');
-      return;
-    }
-    await uploadImage();
   };
 
   return (
@@ -194,7 +225,10 @@ function CreatePost() {
           </label>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              if (e.target.value !== '二手交易') setEstimatedPrice('');
+            }}
             style={{
               width: '100%',
               padding: '8px',
@@ -204,17 +238,48 @@ function CreatePost() {
               backgroundColor: '#fff'
             }}
           >
-            <option value="">请选择分类</option>
+            <option value="">
+              {categoriesLoading ? '分类加载中...' : '请选择分类'}
+            </option>
             {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+              <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
             ))}
           </select>
+          {categoryError && (
+            <p style={{ color: '#ff4d4f', fontSize: '12px', marginTop: '6px' }}>{categoryError}</p>
+          )}
+          {!categoriesLoading && !categoryError && categories.length === 0 && (
+            <p style={{ color: '#999', fontSize: '12px', marginTop: '6px' }}>暂无可用分类，请先在后端维护真实分类数据。</p>
+          )}
         </div>
+
+        {category === '二手交易' && (
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              预估价格
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="请输入预估价格"
+              value={estimatedPrice}
+              onChange={(e) => setEstimatedPrice(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ddd',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+        )}
 
         {/* 图片区域 */}
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            图片（可选）
+            图片（可选，最多 {MAX_IMAGES} 张）
           </label>
 
           {/* 文件选择按钮 */}
@@ -232,35 +297,13 @@ function CreatePost() {
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />
             </label>
 
-            {imageFile && !uploadedUrl && (
-              <button
-                type="button"
-                onClick={handleManualUpload}
-                disabled={uploading}
-                style={{
-                  padding: '8px 16px',
-                  border: '1px solid #1890ff',
-                  borderRadius: '4px',
-                  background: uploading ? '#a0cfff' : '#e6f7ff',
-                  color: uploading ? '#666' : '#1890ff',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                {uploading ? '上传中...' : '☁️ 上传图片'}
-              </button>
-            )}
-
-            {uploadedUrl && (
-              <span style={{ color: '#52c41a', fontSize: '13px' }}>✅ 已上传</span>
-            )}
-
-            {(imageFile || uploadedUrl) && (
+            {(imageFiles.length > 0 || uploadedUrls.length > 0) && (
               <button
                 type="button"
                 onClick={handleClearImage}
@@ -273,24 +316,48 @@ function CreatePost() {
                   fontSize: '14px'
                 }}
               >
-                ❌ 清除图片
+                清除图片
               </button>
             )}
           </div>
 
           {/* 图片预览 */}
-          {(imagePreview || uploadedUrl) && (
-            <img
-              src={uploadedUrl || imagePreview}
-              alt="预览"
-              style={{
-                maxWidth: '100%',
-                maxHeight: '200px',
-                borderRadius: '4px',
-                display: 'block',
-                marginTop: '8px'
-              }}
-            />
+          {imagePreviews.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px', marginTop: '8px' }}>
+              {imagePreviews.map((preview, index) => (
+                <div key={preview} style={{ position: 'relative' }}>
+                  <img
+                    src={uploadedUrls[index] || preview}
+                    alt={`预览 ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      height: '120px',
+                      objectFit: 'cover',
+                      borderRadius: '4px',
+                      display: 'block'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(index)}
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '24px',
+                      height: '24px',
+                      background: 'rgba(0,0,0,0.55)',
+                      color: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

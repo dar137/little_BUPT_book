@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { postAPI } from "../api";
+import { categoryAPI, postAPI } from "../api";
 
 const Search = () => {
   const [keyword, setKeyword] = useState("");
@@ -9,7 +9,7 @@ const Search = () => {
   const [error, setError] = useState(null);
 
   // 分类筛选
-  const categories = ["全部", "组队", "失物招领", "学习交流"];
+  const [categories, setCategories] = useState(["全部"]);
   const [activeCate, setActiveCate] = useState("全部");
 
   // 搜索历史
@@ -19,6 +19,20 @@ const Search = () => {
   useEffect(() => {
     const saved = localStorage.getItem("searchHistory");
     if (saved) setHistory(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryAPI.getList();
+        const names = (data.list || []).map((item) => item.name).filter(Boolean);
+        setCategories(["全部", ...names]);
+      } catch {
+        setCategories(["全部"]);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   // 保存历史

@@ -28,6 +28,7 @@ __pycache__/
 # Upload files
 app/uploads/
 xiaoyoushu-backend/app/uploads/
+xiaoyoushu-backend/uploads/
 
 # Editor directories and files
 .vscode/*

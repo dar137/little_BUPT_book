@@ -1,106 +1,146 @@
 // src/pages/AdminDashboard.jsx
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaTrash, FaEye } from "react-icons/fa";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
-// 模拟 AI 标记的可疑帖子数据（实际应从后端获取）
-const mockAIPosts = [
-  {
-    id: 101,
-    title: "免费送演唱会门票",
-    content: "点击链接领取，先到先得 http://fake.com",
-    author: "可疑用户001",
-    createdAt: "2024-06-01 10:23",
-    aiScore: 0.95,
-  },
-  {
-    id: 102,
-    title: "兼职日入500",
-    content: "加微信 xxxx 咨询，日结轻松赚钱",
-    author: "广告哥",
-    createdAt: "2024-06-02 14:15",
-    aiScore: 0.98,
-  },
-  {
-    id: 103,
-    title: "求购二手自行车",
-    content: "想买一辆二手自行车，价格好商量",
-    author: "小明",
-    createdAt: "2024-06-03 09:00",
-    aiScore: 0.12, // 低分，表示AI认为正常
-  },
-];
-
-// 模拟举报数据
-const mockReports = [
-  {
-    id: 1,
-    targetType: "post",
-    targetId: 101,
-    reason: "垃圾广告",
-    description: "帖子中含有外部链接，疑似诈骗",
-    reporter: "热心同学",
-    createdAt: "2024-06-01 11:20",
-  },
-  {
-    id: 2,
-    targetType: "user",
-    targetId: 5,
-    reason: "人身攻击",
-    description: "该用户在评论区辱骂他人",
-    reporter: "李华",
-    createdAt: "2024-06-02 08:45",
-  },
-];
+import { adminAPI, fetchProtectedAsset } from "../api";
 
 const AdminDashboard = () => {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("ai_review");
-  const [pendingPosts, setPendingPosts] = useState(mockAIPosts);
-  const [reports, setReports] = useState(mockReports);
+  const [pendingPosts, setPendingPosts] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [registrations, setRegistrations] = useState([]);
+  const [selectedRegistration, setSelectedRegistration] = useState(null);
+  const [cardPreviewUrl, setCardPreviewUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // 非管理员直接跳转首页
+  const reportReasonLabels = {
+    SPAM: "垃圾广告",
+    AD: "广告营销",
+    ABUSE: "人身攻击",
+    FALSE_INFO: "虚假信息",
+    ILLEGAL: "违法违规",
+    OTHER: "其他",
+  };
+
+  const reportTargetLabels = {
+    POST: "帖子",
+    COMMENT: "评论",
+    USER: "用户",
+  };
+
   useEffect(() => {
-    if (!currentUser || currentUser.role !== "admin") {
-      navigate("/");
+    if (!currentUser || currentUser.role !== "ADMIN") return;
+
+    const loadAdminData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [postsData, reportsData] = await Promise.all([
+          adminAPI.getPendingPosts(),
+          adminAPI.getReports(),
+        ]);
+        setPendingPosts(postsData.list || []);
+        setReports(reportsData.list || []);
+        try {
+          const registrationsData = await adminAPI.getRegistrations();
+          setRegistrations(registrationsData.list || []);
+        } catch {
+          setRegistrations([]);
+        }
+      } catch (err) {
+        setError(err.message || "加载管理数据失败");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAdminData();
+  }, [currentUser]);
+
+  useEffect(() => {
+    let objectUrl = "";
+
+    const loadCardPreview = async () => {
+      if (!selectedRegistration?.student_card_url) {
+        setCardPreviewUrl("");
+        return;
+      }
+
+      try {
+        objectUrl = await fetchProtectedAsset(selectedRegistration.student_card_url);
+        setCardPreviewUrl(objectUrl);
+      } catch (err) {
+        setError(err.message || "学生证图片加载失败");
+        setCardPreviewUrl("");
+      }
+    };
+
+    loadCardPreview();
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedRegistration]);
+
+  const handleRegistrationDecision = async (registration, decision) => {
+    try {
+      if (decision === "approve") {
+        await adminAPI.approveRegistration(registration.id);
+      } else {
+        await adminAPI.rejectRegistration(registration.id);
+      }
+      setRegistrations(prev => prev.filter(item => item.id !== registration.id));
+      setSelectedRegistration(null);
+    } catch (err) {
+      alert("处理失败：" + (err.message || "请稍后重试"));
     }
-  }, [currentUser, navigate]);
-
-  // ---------- AI发帖复核处理 ----------
-  const handleApprovePost = (postId) => {
-    setPendingPosts((prev) => prev.filter((p) => p.id !== postId));
-    alert(`帖子 ${postId} 已通过，将正常发布`);
-    // TODO: 调用后端 API /api/admin/approve-post
   };
 
-  const handleDeletePost = (postId) => {
-    setPendingPosts((prev) => prev.filter((p) => p.id !== postId));
-    alert(`帖子 ${postId} 已删除`);
-    // TODO: 调用后端 API /api/admin/delete-post
-  };
+  if (!currentUser) {
+    return (
+      <div style={{ maxWidth: "720px", margin: "48px auto", padding: "24px", textAlign: "center" }}>
+        <h2>请先登录</h2>
+        <p style={{ color: "#666", margin: "12px 0 20px" }}>管理员后台需要登录后访问。</p>
+        <Link to="/login" style={{ color: "#1677ff" }}>去登录</Link>
+      </div>
+    );
+  }
 
-  // ---------- 举报审核处理 ----------
-  const handleConfirmReport = (reportId) => {
-    setReports((prev) => prev.filter((r) => r.id !== reportId));
-    alert(`举报 ${reportId} 已确认，相关内容已下架/用户已处理`);
-    // TODO: 调用后端 API /api/admin/confirm-report
-  };
-
-  const handleRejectReport = (reportId) => {
-    setReports((prev) => prev.filter((r) => r.id !== reportId));
-    alert(`举报 ${reportId} 已驳回（不违规）`);
-    // TODO: 调用后端 API /api/admin/reject-report
-  };
+  if (currentUser.role !== "ADMIN") {
+    return (
+      <div style={{ maxWidth: "720px", margin: "48px auto", padding: "24px", textAlign: "center" }}>
+        <h2>无管理员权限</h2>
+        <p style={{ color: "#666", margin: "12px 0 20px" }}>当前账号不能访问管理员后台。</p>
+        <Link to="/" style={{ color: "#1677ff" }}>返回首页</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-container" style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px" }}>
       <h1 style={{ fontSize: "28px", marginBottom: "8px" }}>管理后台</h1>
-      <p style={{ color: "#666", marginBottom: "24px" }}>欢迎回来，{currentUser?.name || "管理员"}</p>
+      <p style={{ color: "#666", marginBottom: "24px" }}>欢迎回来，{currentUser?.nickname || currentUser?.username || "管理员"}</p>
+      {loading && <p style={{ color: "#666" }}>正在加载管理数据...</p>}
+      {error && <p style={{ color: "#f56565" }}>{error}</p>}
 
       {/* Tab 切换栏 */}
       <div className="admin-tabs" style={{ display: "flex", gap: "16px", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
+        <button
+          onClick={() => setActiveTab("registrations")}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            fontWeight: activeTab === "registrations" ? "600" : "400",
+            color: activeTab === "registrations" ? "#ff6b6b" : "#4a5568",
+            borderBottom: activeTab === "registrations" ? "2px solid #ff6b6b" : "none",
+            background: "none",
+            cursor: "pointer",
+          }}
+        >
+          注册审核 ({registrations.length})
+        </button>
         <button
           onClick={() => setActiveTab("ai_review")}
           style={{
@@ -113,7 +153,7 @@ const AdminDashboard = () => {
             cursor: "pointer",
           }}
         >
-          🤖 AI发帖复核 ({pendingPosts.length})
+          AI发帖复核 ({pendingPosts.length})
         </button>
         <button
           onClick={() => setActiveTab("reports")}
@@ -127,9 +167,55 @@ const AdminDashboard = () => {
             cursor: "pointer",
           }}
         >
-          🚨 举报审核 ({reports.length})
+          举报审核 ({reports.length})
         </button>
       </div>
+
+      {activeTab === "registrations" && (
+        <div className="admin-registration-list">
+          {registrations.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px", color: "#a0aec0" }}>暂无待审核注册申请</div>
+          ) : (
+            registrations.map((registration) => (
+              <div
+                key={registration.id}
+                style={{
+                  background: "white",
+                  borderRadius: "16px",
+                  padding: "20px",
+                  marginBottom: "16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  border: "1px solid #edf2f7",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+                  <div>
+                    <h3 style={{ fontSize: "18px", marginBottom: "8px" }}>{registration.nickname}</h3>
+                    <p style={{ margin: "4px 0", color: "#4a5568" }}>学号：{registration.username}</p>
+                    {registration.email && <p style={{ margin: "4px 0", color: "#4a5568" }}>邮箱：{registration.email}</p>}
+                    <p style={{ margin: "4px 0", color: "#718096", fontSize: "13px" }}>提交时间：{registration.created_at}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRegistration(registration)}
+                    style={{
+                      height: "36px",
+                      padding: "0 18px",
+                      border: "1px solid #1677ff",
+                      color: "#1677ff",
+                      background: "#e6f4ff",
+                      borderRadius: "18px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    查看详情
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* AI 发帖复核列表 */}
       {activeTab === "ai_review" && (
@@ -153,27 +239,27 @@ const AdminDashboard = () => {
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>{post.title}</h3>
                   <span
                     style={{
-                      background: post.aiScore > 0.7 ? "#fed7d7" : "#c6f6d5",
-                      color: post.aiScore > 0.7 ? "#c53030" : "#276749",
+                      background: "#fed7d7",
+                      color: "#c53030",
                       padding: "4px 8px",
                       borderRadius: "20px",
                       fontSize: "12px",
                     }}
                   >
-                    AI可疑度: {(post.aiScore * 100).toFixed(0)}%
+                    {post.status}
                   </span>
                 </div>
                 <p style={{ color: "#4a5568", marginBottom: "12px" }}>{post.content}</p>
                 <div style={{ fontSize: "13px", color: "#718096", marginBottom: "16px" }}>
-                  作者：{post.author} · 发布时间：{post.createdAt}
+                  作者：{post.nickname || post.user_id} · 创建时间：{post.created_at}
                 </div>
                 <div style={{ display: "flex", gap: "12px" }}>
-                  <button
-                    onClick={() => handleApprovePost(post.id)}
+                  <Link
+                    to={`/post/${post.id}?adminReview=post`}
                     style={{
-                      background: "#48bb78",
-                      color: "white",
-                      border: "none",
+                      background: "#edf2f7",
+                      color: "#2d3748",
+                      textDecoration: "none",
                       padding: "8px 20px",
                       borderRadius: "30px",
                       cursor: "pointer",
@@ -183,25 +269,8 @@ const AdminDashboard = () => {
                       fontSize: "14px",
                     }}
                   >
-                    <FaCheckCircle /> 通过
-                  </button>
-                  <button
-                    onClick={() => handleDeletePost(post.id)}
-                    style={{
-                      background: "#f56565",
-                      color: "white",
-                      border: "none",
-                      padding: "8px 20px",
-                      borderRadius: "30px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    <FaTrash /> 删除
-                  </button>
+                    查看帖子
+                  </Link>
                 </div>
               </div>
             ))
@@ -229,61 +298,76 @@ const AdminDashboard = () => {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px" }}>
                   <span style={{ fontWeight: "600" }}>
-                    举报 #{report.id} · 目标类型: {report.targetType === "post" ? "帖子" : "用户"}
+                    举报 #{report.id} · {reportTargetLabels[report.target_type] || report.target_type}
                   </span>
-                  <span style={{ fontSize: "12px", color: "#a0aec0" }}>{report.createdAt}</span>
+                  <span style={{ fontSize: "12px", color: "#a0aec0" }}>{report.created_at}</span>
                 </div>
                 <p>
-                  <strong>目标ID：</strong> {report.targetId}
+                  <strong>被举报内容：</strong> {report.target_title || "内容不存在或已删除"}
                 </p>
                 <p>
-                  <strong>举报原因：</strong> {report.reason}
+                  <strong>举报原因：</strong> {reportReasonLabels[report.reason_type] || report.reason_type}
                 </p>
                 <p>
-                  <strong>详细描述：</strong> {report.description}
+                  <strong>详细描述：</strong> {report.reason_detail || "无"}
                 </p>
                 <p>
-                  <strong>举报人：</strong> {report.reporter}
+                  <strong>举报人：</strong> {report.reporter_nickname || report.reporter_id}
                 </p>
-                <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
-                  <button
-                    onClick={() => handleConfirmReport(report.id)}
+                <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
+                  <Link
+                    to={`${report.target_type === "COMMENT" ? `/post/${report.target_post_id || report.target_id}` : `/post/${report.target_id}`}?reportId=${report.id}`}
                     style={{
-                      background: "#48bb78",
-                      color: "white",
-                      border: "none",
+                      background: "#edf2f7",
+                      color: "#2d3748",
+                      textDecoration: "none",
                       padding: "8px 20px",
                       borderRadius: "30px",
                       cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
                       fontSize: "14px",
                     }}
                   >
-                    <FaCheckCircle /> 确认违规（下架/封禁）
-                  </button>
-                  <button
-                    onClick={() => handleRejectReport(report.id)}
-                    style={{
-                      background: "#f56565",
-                      color: "white",
-                      border: "none",
-                      padding: "8px 20px",
-                      borderRadius: "30px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    <FaTimesCircle /> 驳回举报
-                  </button>
+                    查看被举报帖子
+                  </Link>
                 </div>
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {selectedRegistration && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: "12px", maxWidth: "760px", width: "100%", maxHeight: "90vh", overflow: "auto", padding: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: 0 }}>注册申请详情</h3>
+                <p style={{ color: "#666", margin: "6px 0 0" }}>{selectedRegistration.nickname} · {selectedRegistration.username}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedRegistration(null)} style={{ border: "none", background: "#edf2f7", borderRadius: "16px", height: "32px", padding: "0 14px", cursor: "pointer" }}>关闭</button>
+            </div>
+            {cardPreviewUrl ? (
+              <img src={cardPreviewUrl} alt="学生证或学生卡" style={{ width: "100%", maxHeight: "56vh", objectFit: "contain", background: "#f7fafc", borderRadius: "8px" }} />
+            ) : (
+              <div style={{ padding: "48px", textAlign: "center", color: "#999", background: "#f7fafc", borderRadius: "8px" }}>图片加载中...</div>
+            )}
+            <div style={{ display: "flex", gap: "12px", marginTop: "20px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => handleRegistrationDecision(selectedRegistration, "reject")}
+                style={{ padding: "9px 18px", border: "1px solid #ff7875", color: "#cf1322", background: "#fff1f0", borderRadius: "20px", cursor: "pointer" }}
+              >
+                否决：图片无法验证身份
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRegistrationDecision(selectedRegistration, "approve")}
+                style={{ padding: "9px 18px", border: "1px solid #52c41a", color: "white", background: "#52c41a", borderRadius: "20px", cursor: "pointer" }}
+              >
+                通过
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

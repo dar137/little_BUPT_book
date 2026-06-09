@@ -1,14 +1,19 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { reportAPI } from "../api";
 
 const Report = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    targetType: "post",
+    targetType: "POST",
     targetId: "",
-    reason: "",
-    description: "",
+    reasonType: "",
+    reasonDetail: "",
   });
   const [submitted, setSubmitted] = useState(false);
   const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [preloadedTitle, setPreloadedTitle] = useState(""); // 新增：存储被举报内容的标题
 
   // 组件加载时，检查是否有从其他页面传来的举报信息
@@ -16,9 +21,10 @@ const Report = () => {
     const reportTarget = localStorage.getItem("reportTarget");
     if (reportTarget) {
       const target = JSON.parse(reportTarget);
+      const targetType = String(target.targetType || "POST").toUpperCase();
       setFormData(prev => ({
         ...prev,
-        targetType: target.targetType || "post",
+        targetType: targetType === "COMMENT" ? "COMMENT" : "POST",
         targetId: target.targetId || "",
       }));
       if (target.targetTitle) {
@@ -35,10 +41,29 @@ const Report = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: 替换成真实接口 /api/report/submit
-    console.log("提交举报:", formData);
-    setSubmitted(true);
-    setStatus("pending");
+    setError("");
+
+    if (!formData.targetId) {
+      setError("请从帖子或评论入口发起举报");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await reportAPI.submit({
+        targetType: formData.targetType,
+        targetId: Number(formData.targetId),
+        reasonType: formData.reasonType,
+        reasonDetail: formData.reasonDetail || undefined,
+      });
+      setSubmitted(true);
+      setStatus("pending");
+    } catch (err) {
+      setError(err.message || "举报提交失败，请稍后重试");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -48,7 +73,7 @@ const Report = () => {
           <h2>举报已提交</h2>
           <p>感谢您的反馈，我们会尽快处理。</p>
           <p>当前状态：{status === "pending" ? "审核中" : status}</p>
-          <button onClick={() => setSubmitted(false)} style={styles.button}>继续举报</button>
+          <button onClick={() => navigate("/")} style={styles.button}>确定</button>
         </div>
       </div>
     );
@@ -67,30 +92,18 @@ const Report = () => {
           <div style={styles.field}>
             <label>举报类型</label>
             <select name="targetType" value={formData.targetType} onChange={handleChange} style={styles.input}>
-              <option value="post">违规帖子</option>
-              <option value="user">违规用户</option>
+              <option value="POST">违规帖子</option>
+              <option value="COMMENT">违规评论</option>
             </select>
           </div>
           <div style={styles.field}>
-            <label>帖子ID / 用户ID</label>
-            <input
-              type="text"
-              name="targetId"
-              value={formData.targetId}
-              onChange={handleChange}
-              placeholder="请输入ID"
-              style={styles.input}
-              required
-            />
-          </div>
-          <div style={styles.field}>
             <label>举报原因</label>
-            <select name="reason" value={formData.reason} onChange={handleChange} style={styles.input} required>
+            <select name="reasonType" value={formData.reasonType} onChange={handleChange} style={styles.input} required>
               <option value="">请选择</option>
-              <option value="spam">垃圾广告</option>
-              <option value="abuse">人身攻击</option>
-              <option value="illegal">违法违规</option>
-              <option value="other">其他</option>
+              <option value="SPAM">垃圾广告</option>
+              <option value="ABUSE">人身攻击</option>
+              <option value="ILLEGAL">违法违规</option>
+              <option value="OTHER">其他</option>
             </select>
           </div>
           <div style={styles.field}>
@@ -98,12 +111,15 @@ const Report = () => {
             <textarea
               name="description"
               rows="4"
-              value={formData.description}
-              onChange={handleChange}
+              value={formData.reasonDetail}
+              onChange={(e) => setFormData({ ...formData, reasonDetail: e.target.value })}
               style={styles.textarea}
             />
           </div>
-          <button type="submit" style={styles.button}>提交举报</button>
+          {error && <p style={styles.error}>{error}</p>}
+          <button type="submit" style={styles.button} disabled={submitting}>
+            {submitting ? "提交中..." : "提交举报"}
+          </button>
         </form>
       </div>
     </div>
@@ -117,6 +133,7 @@ const styles = {
   input: { width: "100%", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "4px" },
   textarea: { width: "100%", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "4px", fontFamily: "inherit" },
   button: { width: "100%", padding: "0.75rem", backgroundColor: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" },
+  error: { color: "#dc3545", fontSize: "0.875rem" },
   preloadNotice: {
     backgroundColor: "#e6f7ff",
     border: "1px solid #91d5ff",

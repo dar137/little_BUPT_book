@@ -1,8 +1,18 @@
 import { Link } from 'react-router-dom';
 import { FaFlag } from 'react-icons/fa';  // 添加举报图标
+import { resolveAssetUrl } from '../api';
 
 // 增加 onReport 属性
 function PostCard({ post, onReport }) {
+  const authorName = post.author?.nickname || post.author || '匿名用户';
+  const authorAvatar = resolveAssetUrl(post.author?.avatar);
+  const imageUrl = post.coverImage || post.image;
+  const categoryName = post.category || post.tag || '未分类';
+  const summary = post.summary || post.content || '';
+  const createdAt = post.createdAt || post.time || '';
+  const isAdminAuthor = post.author?.role === 'ADMIN';
+  const isSecondHand = categoryName === '二手交易';
+
   const handleReportClick = (e) => {
     e.preventDefault();      // 阻止 Link 跳转
     e.stopPropagation();     // 阻止事件冒泡
@@ -42,9 +52,9 @@ function PostCard({ post, onReport }) {
 
         }}>
           {/* 缩略图 */}
-          {post.image ? (
+          {imageUrl ? (
             <img
-              src={post.image}
+              src={imageUrl}
               alt={post.title}
               style={{
                 width: '90px',
@@ -80,7 +90,7 @@ function PostCard({ post, onReport }) {
             fontWeight: '500',
             whiteSpace: 'nowrap'
           }}>
-            {post.tag}
+            {categoryName}
           </span>
         </div>
 
@@ -94,23 +104,50 @@ function PostCard({ post, onReport }) {
             gap: '8px',
             marginBottom: '8px'
           }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              backgroundColor: '#e6f7ff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              color: '#1890ff',
-              flexShrink: 0
-            }}>
-              👤
-            </div>
+            {authorAvatar ? (
+              <img
+                src={authorAvatar}
+                alt={authorName}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  flexShrink: 0
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: '#e6f7ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                color: '#1890ff',
+                flexShrink: 0
+              }}>
+                👤
+              </div>
+            )}
             <span style={{ fontSize: '13px', color: '#333', fontWeight: '500' }}>
-              {post.author}
+              {authorName}
             </span>
+            {isAdminAuthor && (
+              <span style={{
+                background: '#f0fff4',
+                border: '1px solid #9ae6b4',
+                color: '#2f855a',
+                borderRadius: '10px',
+                padding: '1px 6px',
+                fontSize: '11px',
+                fontWeight: '600'
+              }}>
+                管理员
+              </span>
+            )}
           </div>
 
 
@@ -128,15 +165,20 @@ function PostCard({ post, onReport }) {
             color: '#666',
             fontSize: '14px',
             lineHeight: '1.5',
-            margin: '0 0 30px 0',
+            margin: isSecondHand && post.estimatedPrice ? '0 0 8px 0' : '0 0 30px 0',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}>
-            {post.content}
+            {summary}
           </p>
+          {isSecondHand && post.estimatedPrice && (
+            <div style={{ color: '#b7791f', fontSize: '15px', fontWeight: '700', marginBottom: '30px' }}>
+              ￥{post.estimatedPrice}
+            </div>
+          )}
         </div>
 
         {/* ========== 右下角：时间 + 评论 + 点赞 + 收藏 ========== */}
@@ -150,10 +192,29 @@ function PostCard({ post, onReport }) {
           fontSize: '12px',
           gap: '12px'
         }}>
-          <span>🕒 {post.time}</span>
+          <span>🕒 {createdAt}</span>
           <span>💬 {post.commentsCount ?? 0}</span>
           <span>❤️ {post.likesCount ?? 0}</span>
           <span>⭐ {post.collectsCount ?? 0}</span>
+          {onReport && (
+            <button
+              onClick={handleReportClick}
+              title="举报"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                border: 'none',
+                background: 'transparent',
+                color: '#999',
+                cursor: 'pointer',
+                padding: 0,
+                fontSize: '12px'
+              }}
+            >
+              <FaFlag /> 举报
+            </button>
+          )}
         </div>
       </div>
     </Link>

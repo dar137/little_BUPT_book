@@ -2,43 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PostCard from '../components/PostCard';
-import { FaUser, FaEnvelope, FaIdCard } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
-
-// ------------------------------
-// 带 Token 的请求封装（与 Profile 中保持一致）
-// ------------------------------
-const fetchWithAuth = async (url, options = {}) => {
-  const token = localStorage.getItem("token");
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const res = await fetch(url, { ...options, headers });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.message || `HTTP ${res.status}`);
-  }
-  return res.json();
-};
-
-// 模拟数据（降级用）
-const mockUserData = {
-  101: { id: 101, name: '小明', studentId: '20240001', bio: '热爱摄影和前端', avatar: '', email: 'xiaoming@bupt.edu.cn' },
-  102: { id: 102, name: '热心同学', studentId: '20240002', bio: '失物招领达人', avatar: '' },
-};
-const mockUserPosts = {
-  101: [
-    { id: 1, title: '求助：React 路由配置', content: '有没有大佬知道...', author: '小明', authorId: 101, time: '10分钟前', tag: '求助', likes: 5, comments: 3, image: '' },
-    { id: 2, title: '分享一个好用的前端工具', content: '今天发现一个神器...', author: '小明', authorId: 101, time: '1小时前', tag: '分享', likes: 12, comments: 7, image: '' },
-  ],
-  102: [
-    { id: 3, title: '图书馆四楼捡到一张校园卡', content: '失主叫张三...', author: '热心同学', authorId: 102, time: '昨天', tag: '失物招领', likes: 23, comments: 5, image: '' },
-  ],
-};
+import { resolveAssetUrl, userAPI } from '../api';
 
 const UserProfile = () => {
   const { userId } = useParams();
@@ -55,22 +20,14 @@ const UserProfile = () => {
       setLoading(true);
       setError('');
       try {
-        // 优先尝试后端接口
-        const userData = await fetchWithAuth(`/api/user/${userId}`);
-        const postsData = await fetchWithAuth(`/api/user/${userId}/posts`);
+        const [userData, postsData] = await Promise.all([
+          userAPI.getPublicProfile(userId),
+          userAPI.getUserPosts(userId),
+        ]);
         setUser(userData);
-        setPosts(postsData.list || postsData);
+        setPosts(postsData.list || []);
       } catch (err) {
-        console.warn('后端获取用户信息失败，使用模拟数据', err);
-        // 降级：使用模拟数据
-        const mockUser = mockUserData[userId];
-        const mockPosts = mockUserPosts[userId] || [];
-        if (mockUser) {
-          setUser(mockUser);
-          setPosts(mockPosts);
-        } else {
-          setError('用户不存在');
-        }
+        setError(err.message || '用户不存在');
       } finally {
         setLoading(false);
       }
@@ -88,15 +45,13 @@ const UserProfile = () => {
       <div style={styles.card}>
         <div style={styles.avatar}>
           {user.avatar ? (
-            <img src={user.avatar} alt={user.name} style={styles.avatarImg} />
+            <img src={resolveAssetUrl(user.avatar)} alt={user.nickname} style={styles.avatarImg} />
           ) : (
-            <div style={styles.avatarPlaceholder}>{user.name.charAt(0)}</div>
+            <div style={styles.avatarPlaceholder}>{(user.nickname || user.username || '?').charAt(0)}</div>
           )}
         </div>
         <div style={styles.info}>
-          <h2>{user.name}</h2>
-          <p><FaIdCard /> 学号：{user.studentId}</p>
-          {user.email && <p><FaEnvelope /> {user.email}</p>}
+          <h2>{user.nickname || user.username}</h2>
           <p className="bio">{user.bio || '这个人很懒，什么都没写~'}</p>
           {isOwnProfile && (
             <Link to="/profile" style={styles.editBtn}>编辑资料</Link>

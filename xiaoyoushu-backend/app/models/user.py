@@ -26,8 +26,17 @@ class User(db.Model):
         default="NORMAL"
     )
 
+    review_status = db.Column(
+        db.String(32),
+        nullable=False,
+        default="APPROVED",
+        server_default="APPROVED"
+    )
+
     mute_until = db.Column(db.DateTime, nullable=True)
     bio = db.Column(db.String(255), nullable=True)
+    student_card_url = db.Column(db.String(512), nullable=True)
+    review_reject_reason = db.Column(db.String(255), nullable=True)
     last_login_at = db.Column(db.DateTime, nullable=True)
 
     created_at = db.Column(
