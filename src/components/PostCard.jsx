@@ -12,6 +12,12 @@ function PostCard({ post, onReport }) {
   const createdAt = post.createdAt || post.time || '';
   const isAdminAuthor = post.author?.role === 'ADMIN';
   const isSecondHand = categoryName === '二手交易';
+  const placeholderConfig = {
+    二手交易: { icon: '🛍️', label: '二手好物' },
+    失物招领: { icon: '🔎', label: '失物招领' },
+    学习交流: { icon: '📚', label: '学习交流' },
+    校园生活: { icon: '🏫', label: '校园生活' },
+  }[categoryName] || { icon: '📌', label: categoryName };
 
   const handleReportClick = (e) => {
     e.preventDefault();      // 阻止 Link 跳转
@@ -31,23 +37,22 @@ function PostCard({ post, onReport }) {
       }}
     >
       <div style={{
-        border: '1px solid #e8e8e8',
-        margin: '12px 0',
-        padding: '16px',
+        border: '1px solid #dedede',
+        margin: '14px 0',
+        padding: '18px',
         borderRadius: '12px',
         backgroundColor: '#fff',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: '0 5px 16px rgba(0,0,0,0.08)',
         display: 'flex',
-        gap: '14px',
+        gap: '18px',
         alignItems: 'flex-start',
         position: 'relative',
       }}>
-        {/* ========== 左侧：图片 + 分类标签 ========== */}
+        {/* ========== 左侧：图片 ========== */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '6px',
           flexShrink: 0
 
         }}>
@@ -57,41 +62,31 @@ function PostCard({ post, onReport }) {
               src={imageUrl}
               alt={post.title}
               style={{
-                width: '90px',
-                height: '90px',
-                borderRadius: '10px',
+                width: '118px',
+                height: '118px',
+                borderRadius: '12px',
                 objectFit: 'cover',
-                border: '1px solid #f0f0f0'
+                border: '1px solid #e7e7e7'
               }}
             />
           ) : (
             <div style={{
-              width: '90px',
-              height: '90px',
-              borderRadius: '10px',
-              backgroundColor: '#f5f5f5',
+              width: '118px',
+              height: '118px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #eef8ff 0%, #d9efff 100%)',
+              border: '1px solid #cfe8ff',
+              color: '#1677ff',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ccc',
-              fontSize: '24px'
+              gap: '6px'
             }}>
-              📷
+              <span style={{ fontSize: '28px', lineHeight: 1 }}>{placeholderConfig.icon}</span>
+              <span style={{ fontSize: '12px', fontWeight: '600' }}>{placeholderConfig.label}</span>
             </div>
           )}
-
-          {/* 分类标签 */}
-          <span style={{
-            background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
-            color: '#1890ff',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            fontSize: '11px',
-            fontWeight: '500',
-            whiteSpace: 'nowrap'
-          }}>
-            {categoryName}
-          </span>
         </div>
 
         {/* ========== 右侧：文字内容 ========== */}
@@ -140,9 +135,9 @@ function PostCard({ post, onReport }) {
                 background: '#f0fff4',
                 border: '1px solid #9ae6b4',
                 color: '#2f855a',
-                borderRadius: '10px',
-                padding: '1px 6px',
-                fontSize: '11px',
+                borderRadius: '8px',
+                padding: '0 5px',
+                fontSize: '10px',
                 fontWeight: '600'
               }}>
                 管理员
@@ -153,7 +148,7 @@ function PostCard({ post, onReport }) {
 
           {/* 标题（去掉了 Link，因为整个卡片已经是链接） */}
           <h3 style={{
-            margin: '0 0 6px 0',
+            margin: '0 0 10px 0',
             fontSize: '16px',
             fontWeight: '600',
             lineHeight: '1.4',
@@ -192,9 +187,20 @@ function PostCard({ post, onReport }) {
           fontSize: '12px',
           gap: '12px'
         }}>
-          <span>🕒 {createdAt}</span>
+          <span style={{
+            color: '#1677ff',
+            backgroundColor: '#e6f4ff',
+            border: '1px solid #bae0ff',
+            borderRadius: '10px',
+            padding: '1px 7px',
+            fontWeight: '500',
+            lineHeight: 1.5
+          }}>
+            {categoryName}
+          </span>
+          <span>{createdAt}</span>
           <span>💬 {post.commentsCount ?? 0}</span>
-          <span>❤️ {post.likesCount ?? 0}</span>
+          <span>❤ {post.likesCount ?? 0}</span>
           <span>⭐ {post.collectsCount ?? 0}</span>
           {onReport && (
             <button

@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
+import { adminAPI } from './api';
 import './App.css';
 import Home from './pages/Home';
 import PostDetail from './pages/PostDetail';
@@ -19,6 +21,59 @@ import NotFound from './pages/NotFound';
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [pendingAuditCount, setPendingAuditCount] = useState(0);
+  const [seenAuditCount, setSeenAuditCount] = useState(0);
+
+  const auditSeenKey = currentUser?.id
+    ? `adminSeenAuditCount:${currentUser.id}`
+    : 'adminSeenAuditCount';
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'ADMIN') {
+      setPendingAuditCount(0);
+      setSeenAuditCount(0);
+      return;
+    }
+
+    let ignore = false;
+    const storedSeenAuditCount = Number(localStorage.getItem(auditSeenKey) || 0);
+    setSeenAuditCount(storedSeenAuditCount);
+
+    const loadPendingAuditCount = async () => {
+      try {
+        const [postsData, commentsData, postReportsData, commentReportsData, registrationsData] = await Promise.all([
+          adminAPI.getPendingPosts(),
+          adminAPI.getPendingComments(),
+          adminAPI.getReports({ targetType: 'POST' }),
+          adminAPI.getReports({ targetType: 'COMMENT' }),
+          adminAPI.getRegistrations(),
+        ]);
+        if (ignore) return;
+        const totalPendingAuditCount = (
+          (postsData.list?.length || 0)
+          + (commentsData.list?.length || 0)
+          + (postReportsData.list?.length || 0)
+          + (commentReportsData.list?.length || 0)
+          + (registrationsData.list?.length || 0)
+        );
+        setPendingAuditCount(totalPendingAuditCount);
+        if (totalPendingAuditCount < storedSeenAuditCount) {
+          localStorage.setItem(auditSeenKey, String(totalPendingAuditCount));
+          setSeenAuditCount(totalPendingAuditCount);
+        }
+      } catch {
+        if (!ignore) setPendingAuditCount(0);
+      }
+    };
+
+    loadPendingAuditCount();
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentUser, auditSeenKey]);
+
+  const newAuditCount = Math.max(pendingAuditCount - seenAuditCount, 0);
 
   const handleMyClick = () => {
     if (currentUser) {
@@ -32,6 +87,11 @@ const Navbar = () => {
     if (!window.confirm('是否确认退出登录')) return;
     logout();
     navigate('/');
+  };
+
+  const handleAdminClick = () => {
+    localStorage.setItem(auditSeenKey, String(pendingAuditCount));
+    setSeenAuditCount(pendingAuditCount);
   };
 
   return (
@@ -59,8 +119,30 @@ const Navbar = () => {
           {currentUser ? (
             <>
               {currentUser.role === 'ADMIN' && (
-                <Link to="/admin" className="nav-item admin-nav-item">
-                  <FaShieldAlt className="nav-icon" />
+                <Link to="/admin" className="nav-item admin-nav-item" style={{ position: 'relative' }} onClick={handleAdminClick}>
+                  <span style={{ position: 'relative', display: 'inline-flex' }}>
+                    <FaShieldAlt className="nav-icon" />
+                    {newAuditCount > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-8px',
+                        right: '-10px',
+                        minWidth: '16px',
+                        height: '16px',
+                        padding: '0 4px',
+                        borderRadius: '9px',
+                        background: '#ff4d4f',
+                        color: '#fff',
+                        fontSize: '10px',
+                        lineHeight: '16px',
+                        fontWeight: '700',
+                        boxSizing: 'border-box',
+                        textAlign: 'center'
+                      }}>
+                        {newAuditCount > 99 ? '99+' : newAuditCount}
+                      </span>
+                    )}
+                  </span>
                   <span>管理</span>
                 </Link>
               )}

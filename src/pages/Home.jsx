@@ -15,7 +15,7 @@ function Home() {
     setError(null);
 
     try {
-      const params = {};
+      const params = { pageSize: 50 };
       if (category && category !== '全部') {
         params.category = category;
       }

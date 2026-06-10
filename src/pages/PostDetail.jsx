@@ -70,10 +70,15 @@ function PostDetail() {
     fetchPostDetail();
   }, [id, isPostReview]);
 
+  const promptLoginAndGo = () => {
+    alert('请先登录');
+    navigate('/login');
+  };
+
   // ===== 处理点赞 =====
   const handleLike = async () => {
     if (!currentUser) {
-      alert('请先登录');
+      promptLoginAndGo();
       return;
     }
     try {
@@ -91,7 +96,7 @@ function PostDetail() {
   // ===== 处理收藏 =====
   const handleCollect = async () => {
     if (!currentUser) {
-      alert('请先登录');
+      promptLoginAndGo();
       return;
     }
     try {
@@ -112,7 +117,7 @@ function PostDetail() {
     if (!newComment.trim()) return;
 
     if (!currentUser) {
-      alert('请先登录');
+      promptLoginAndGo();
       return;
     }
 
@@ -138,7 +143,7 @@ function PostDetail() {
     if (!replyContent.trim()) return;
 
     if (!currentUser) {
-      alert('请先登录');
+      promptLoginAndGo();
       return;
     }
 
@@ -160,7 +165,7 @@ function PostDetail() {
   // ===== 打开举报弹窗 =====
   const openReportModal = (target = { type: 'POST', id: post?.id, title: '帖子' }) => {
     if (!currentUser) {
-      alert('请先登录');
+      promptLoginAndGo();
       return;
     }
     setReportTarget(target);

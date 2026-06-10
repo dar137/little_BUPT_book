@@ -38,7 +38,7 @@ const AdminDashboard = () => {
     if (result === "PASS") return null;
 
     const config = {
-      NEED_HUMAN: { label: "AI 可疑", background: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+      NEED_HUMAN: { label: "可疑", background: "#fffbe6", color: "#d48806", border: "#ffe58f" },
       REJECT: { label: "AI 不合规", background: "#fff1f0", color: "#cf1322", border: "#ffa39e" },
     }[result] || { label: "AI 未审核", background: "#f5f5f5", color: "#666", border: "#d9d9d9" };
 
@@ -200,7 +200,7 @@ const AdminDashboard = () => {
             cursor: "pointer",
           }}
         >
-          AI发帖复核 ({pendingPosts.length})
+          发帖人工复核 ({pendingPosts.length})
         </button>
         <button
           onClick={() => setActiveTab("post_reports")}
@@ -314,17 +314,6 @@ const AdminDashboard = () => {
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>{post.title}</h3>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                     {aiReviewBadge(post.ai_review)}
-                    <span
-                      style={{
-                        background: "#fed7d7",
-                        color: "#c53030",
-                        padding: "4px 8px",
-                        borderRadius: "20px",
-                        fontSize: "12px",
-                      }}
-                    >
-                      {post.status}
-                    </span>
                   </div>
                 </div>
                 <p style={{ color: "#4a5568", marginBottom: "12px" }}>{post.content}</p>

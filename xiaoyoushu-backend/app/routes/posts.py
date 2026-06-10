@@ -309,6 +309,7 @@ def create_post(current_user):
     content = data.get("content")
     category_name = data.get("category")
     images = data.get("images", [])
+    trade_role = data.get("tradeRole")
     estimated_price = data.get("estimatedPrice")
 
     if not title:
@@ -325,10 +326,18 @@ def create_post(current_user):
     if not category:
         return fail("分类不存在", code=400, status_code=400)
 
-    if category_name == "二手交易" and not str(estimated_price or "").strip():
+    if category_name == "二手交易" and trade_role not in ["buyer", "seller"]:
+        return fail("请选择买入方或卖出方", code=400, status_code=400)
+
+    if category_name == "二手交易" and trade_role == "seller" and not str(estimated_price or "").strip():
         return fail("预估价格不能为空", code=400, status_code=400)
 
-    content = attach_price_marker(content, str(estimated_price).strip() if estimated_price else None)
+    content = attach_price_marker(
+        content,
+        str(estimated_price).strip()
+        if category_name == "二手交易" and trade_role == "seller" and estimated_price
+        else None
+    )
 
     post = Post(
         user_id=current_user.id,

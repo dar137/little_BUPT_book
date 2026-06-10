@@ -34,6 +34,7 @@ function CreatePost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');           // 分类
+  const [tradeRole, setTradeRole] = useState('');         // 二手交易身份
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [imageFiles, setImageFiles] = useState([]);       // 用户选择的文件对象
   const [imagePreviews, setImagePreviews] = useState([]); // 本地预览链接
@@ -73,6 +74,7 @@ function CreatePost() {
       setTitle(parsed.title || '');
       setContent(parsed.content || '');
       setCategory(parsed.category || '');
+      setTradeRole(parsed.tradeRole || '');
       setEstimatedPrice(parsed.estimatedPrice || '');
     } catch {
       // Ignore invalid draft data.
@@ -188,7 +190,11 @@ function CreatePost() {
       alert('请输入内容');
       return;
     }
-    if (category === '二手交易' && !estimatedPrice.trim()) {
+    if (category === '二手交易' && !tradeRole) {
+      alert('请选择买入方或卖出方');
+      return;
+    }
+    if (category === '二手交易' && tradeRole === 'seller' && !estimatedPrice.trim()) {
       alert('请输入预估价格');
       return;
     }
@@ -210,7 +216,8 @@ function CreatePost() {
         title: title.trim(),
         content: content.trim(),
         category: category,
-        estimatedPrice: category === '二手交易' ? estimatedPrice.trim() : undefined,
+        tradeRole: category === '二手交易' ? tradeRole : undefined,
+        estimatedPrice: category === '二手交易' && tradeRole === 'seller' ? estimatedPrice.trim() : undefined,
         images: imageUrls
       });
 
@@ -225,6 +232,7 @@ function CreatePost() {
       setTitle('');
       setContent('');
       setCategory('');
+      setTradeRole('');
       setEstimatedPrice('');
       handleClearImage();
       navigate('/');
@@ -236,7 +244,15 @@ function CreatePost() {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+    <div style={{
+      padding: '20px',
+      maxWidth: '600px',
+      margin: '0 auto',
+      backgroundColor: '#fff',
+      border: '1px solid #dedede',
+      borderRadius: '12px',
+      boxShadow: '0 5px 16px rgba(0,0,0,0.08)'
+    }}>
       <h2 style={{ textAlign: 'center' }}>✏️ 发布新帖</h2>
 
       <form onSubmit={handleSubmit}>
@@ -269,7 +285,10 @@ function CreatePost() {
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
-              if (e.target.value !== '二手交易') setEstimatedPrice('');
+              if (e.target.value !== '二手交易') {
+                setTradeRole('');
+                setEstimatedPrice('');
+              }
             }}
             style={{
               width: '100%',
@@ -298,23 +317,58 @@ function CreatePost() {
         {category === '二手交易' && (
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              预估价格
+              交易身份
             </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="请输入预估价格"
-              value={estimatedPrice}
-              onChange={(e) => setEstimatedPrice(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #ddd',
-                fontSize: '14px'
-              }}
-            />
+            <div style={{ display: 'flex', gap: '10px', marginBottom: tradeRole === 'seller' ? '12px' : 0 }}>
+              {[
+                { value: 'buyer', label: '买入方' },
+                { value: 'seller', label: '卖出方' }
+              ].map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setTradeRole(option.value);
+                    if (option.value !== 'seller') setEstimatedPrice('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '9px 12px',
+                    borderRadius: '6px',
+                    border: tradeRole === option.value ? '1px solid #1890ff' : '1px solid #ddd',
+                    backgroundColor: tradeRole === option.value ? '#e6f4ff' : '#fff',
+                    color: tradeRole === option.value ? '#1677ff' : '#333',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: tradeRole === option.value ? '600' : '400'
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {tradeRole === 'seller' && (
+              <>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  预估价格
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="请输入预估价格"
+                  value={estimatedPrice}
+                  onChange={(e) => setEstimatedPrice(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px'
+                  }}
+                />
+              </>
+            )}
           </div>
         )}
 
