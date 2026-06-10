@@ -28,8 +28,8 @@ const AuthPrompt = () => {
 
         <div className="auth-features">
           <div>📝 发布动态</div>
-          <div>🔍 智能搜索</div>
-          <div>💬 互动交流</div>
+          <div>🔍 互帮互助</div>
+          <div>💬 生活交流</div>
           <div>📚 学习分享</div>
         </div>
       </div>
