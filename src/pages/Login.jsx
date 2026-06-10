@@ -46,7 +46,7 @@ const Login = () => {
 
         <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label>学号 / 管理员用户名</label>   {/* 提示文字稍作调整，不影响原有功能 */}
+            <label>学号</label>   
             <div className="input-with-icon">
               <FaUser className="input-icon" />
               <input
@@ -54,7 +54,7 @@ const Login = () => {
                 className="input"
                 value={studentId}
                 onChange={(e) => setStudentId(e.target.value)}
-                placeholder="学号 或 管理员用户名"
+                placeholder="请输入学号"
                 required
               />
             </div>
