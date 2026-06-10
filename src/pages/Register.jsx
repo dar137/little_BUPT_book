@@ -59,8 +59,8 @@ const Register = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
+    <div className="auth-container auth-entry-page">
+      <div className="auth-card" style={styles.card}>
         <h2>注册</h2>
         <form onSubmit={handleRegister}>
           <div style={styles.field}>
@@ -96,8 +96,7 @@ const Register = () => {
 };
 
 const styles = {
-  container: { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", backgroundColor: "#f5f5f5" },
-  card: { backgroundColor: "white", padding: "2rem", borderRadius: "8px", width: "100%", maxWidth: "400px" },
+  card: { maxWidth: "400px" },
   field: { marginBottom: "1rem" },
   input: { width: "100%", padding: "0.5rem", marginTop: "0.25rem", border: "1px solid #ddd", borderRadius: "4px" },
   button: { width: "100%", padding: "0.75rem", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" },

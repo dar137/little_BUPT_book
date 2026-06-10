@@ -1,20 +1,20 @@
 // src/pages/AuthPrompt.jsx
 import { useNavigate } from "react-router-dom";
-import { FaSignInAlt, FaUserPlus, FaSchool, FaComment, FaSearch, FaEdit } from "react-icons/fa";
+import { FaSignInAlt, FaUserPlus, FaSchool } from "react-icons/fa";
 
 const AuthPrompt = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="auth-container">
+    <div className="auth-container auth-prompt-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <FaSchool />
+          <span className="brand-mark"><FaSchool /></span>
           <span>小邮书</span>
         </div>
         <div className="auth-header">
           <h2>欢迎来到小邮书</h2>
-          <p>请先登录或注册，查看个人主页</p>
+          <p>请先登录或注册，以获得更多内容</p>
         </div>
 
         <div className="auth-buttons">

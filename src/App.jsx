@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
+import { FaHome, FaPlus, FaSearch, FaUser, FaSignOutAlt, FaShieldAlt, FaSchool } from 'react-icons/fa';
 import { adminAPI } from './api';
 import './App.css';
 import Home from './pages/Home';
@@ -98,7 +98,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="nav-container">
         <Link to="/" className="logo">
-          <span className="logo-icon">📚</span>
+          <span className="logo-mark"><FaSchool /></span>
           <span className="logo-text">小邮书</span>
         </Link>
 
@@ -168,11 +168,24 @@ const Navbar = () => {
   );
 };
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const isAuthRoute = ['/auth-prompt', '/login', '/register'].includes(location.pathname);
+  const isAuthPromptRoute = location.pathname === '/auth-prompt';
+
+  useLayoutEffect(() => {
+    document.body.classList.toggle('auth-route', isAuthRoute);
+    document.body.classList.toggle('auth-prompt-route', isAuthPromptRoute);
+
+    return () => {
+      document.body.classList.remove('auth-route', 'auth-prompt-route');
+    };
+  }, [isAuthRoute, isAuthPromptRoute]);
+
   return (
-    <BrowserRouter>
-      <Navbar />
-      <main className="main-content">
+    <>
+      {!isAuthRoute && <Navbar />}
+      <main className={`main-content${isAuthRoute ? ' main-content-auth' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/post/:id" element={<PostDetail />} />
@@ -188,6 +201,14 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }

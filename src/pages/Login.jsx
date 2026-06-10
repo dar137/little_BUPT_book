@@ -33,10 +33,10 @@ const Login = () => {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-container auth-entry-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <FaSchool />
+          <span className="brand-mark"><FaSchool /></span>
           <span>小邮书</span>
         </div>
         <div className="auth-header">
