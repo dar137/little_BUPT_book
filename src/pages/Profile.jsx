@@ -3,10 +3,10 @@ import { useNavigate, Link } from "react-router-dom";
 import { 
   FaUser, FaEdit, FaHeart, FaBookmark, FaHistory, 
   FaSignOutAlt, FaCamera, FaComment,
-  FaEnvelope, FaIdCard, FaSpinner, FaTrash, FaFlag
+  FaEnvelope, FaIdCard, FaSpinner, FaTrash
 } from "react-icons/fa";
 import { useAuth } from '../context/AuthContext';
-import { postAPI, reportAPI, resolveAssetUrl, userAPI } from '../api';
+import { postAPI, resolveAssetUrl, userAPI } from '../api';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -277,26 +277,6 @@ const Profile = () => {
     }
   };
 
-  const handleReportComment = async (comment) => {
-    if (comment.status !== "PUBLISHED") {
-      alert("仅已发布评论可举报");
-      return;
-    }
-    if (!window.confirm("是否举报该评论")) return;
-
-    try {
-      await reportAPI.submit({
-        targetType: "COMMENT",
-        targetId: comment.id,
-        reasonType: "OTHER",
-        reasonDetail: "个人主页评论举报",
-      });
-      alert("举报已提交，我们会尽快处理");
-    } catch (err) {
-      alert("举报失败：" + (err.message || "请稍后重试"));
-    }
-  };
-
   const handleEditRejectedPost = (post) => {
     sessionStorage.setItem('retryPostDraft', JSON.stringify({
       title: post.title || '',
@@ -523,7 +503,7 @@ const Profile = () => {
         {activeTab === "history" && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {historyPosts.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>暂无浏览历史</div> :
-              historyPosts.map((post, i) => renderListPost(post, `浏览于 ${post.viewedAt || ""}`))
+              historyPosts.map((post) => renderListPost(post, `浏览于 ${post.viewedAt || ""}`))
             }
           </div>
         )}
@@ -588,15 +568,6 @@ const Profile = () => {
                         style={{ border: 'none', background: 'transparent', color: '#e53e3e', cursor: 'pointer', padding: 0, fontSize: '12px' }}
                       >
                         删除
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleReportComment(comment)}
-                        style={{ border: 'none', background: 'transparent', color: '#b7791f', cursor: 'pointer', padding: 0, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <FaFlag size={11} /> 举报
                       </button>
                     </div>
                   </div>
