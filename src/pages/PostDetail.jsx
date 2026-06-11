@@ -292,7 +292,7 @@ function PostDetail() {
   };
   const commentStatusLabel = (comment) => {
     if (comment.status === 'PENDING_REVIEW') return '审核中';
-    if (comment.status === 'REJECTED') return '人工复审不通过';
+    if (comment.status === 'REJECTED') return '审核不通过';
     return '';
   };
   const showInteractions = !isPostReview && post?.status === 'PUBLISHED';
